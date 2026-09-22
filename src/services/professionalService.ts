@@ -1,5 +1,5 @@
 import { appStore } from '../lib/store';
-import { calculateDistanceKm } from '../lib/mapbox';
+import { calculateDistanceKm } from '../lib/googleMaps';
 import { Professional } from '../types';
 
 export const professionalService = {

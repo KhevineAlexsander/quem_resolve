@@ -6,7 +6,7 @@
  */
 
 import { Professional, Category } from '../types';
-import { calculateDistanceKm } from './mapbox';
+import { calculateDistanceKm } from './googleMaps';
 
 export interface KeywordRule {
   categorySlug: string;

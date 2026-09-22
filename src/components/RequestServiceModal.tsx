@@ -17,7 +17,7 @@ import {
 import { useApp } from '../context/AppContext';
 import { serviceRequestService } from '../services/serviceRequestService';
 import { IMPERATRIZ_CENTER } from '../lib/initialData';
-import { geocodeAddress } from '../lib/mapbox';
+import { geocodeAddress } from '../lib/googleMaps';
 import { classifyServiceProblem, ClassificationResult } from '../lib/deterministicSearch';
 
 export const RequestServiceModal: React.FC = () => {

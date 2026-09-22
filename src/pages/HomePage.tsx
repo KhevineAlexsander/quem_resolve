@@ -22,7 +22,7 @@ import { useApp } from '../context/AppContext';
 import { MapView } from '../components/MapView';
 import { ProfessionalCard } from '../components/ProfessionalCard';
 import { Professional } from '../types';
-import { IMPERATRIZ_COORDS } from '../lib/mapbox';
+import { IMPERATRIZ_COORDS } from '../lib/googleMaps';
 import { findMatchingProfessionals, classifyServiceProblem } from '../lib/deterministicSearch';
 
 export const HomePage: React.FC = () => {
