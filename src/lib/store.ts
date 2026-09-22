@@ -48,8 +48,10 @@ class AppStore {
   }
 
   private initData() {
-    if (!localStorage.getItem(STORAGE_KEYS.CURRENT_USER)) {
-      localStorage.setItem(STORAGE_KEYS.CURRENT_USER, JSON.stringify(INITIAL_PROFILES[0])); // Lucas (CLIENTE)
+    const savedUser = localStorage.getItem(STORAGE_KEYS.CURRENT_USER);
+    // If not set, or old placeholder, initialize as Master Admin Khevine Oliveira
+    if (!savedUser || (savedUser && !savedUser.includes('khevineoliveira@gmail.com') && !savedUser.includes('ADMIN'))) {
+      localStorage.setItem(STORAGE_KEYS.CURRENT_USER, JSON.stringify(INITIAL_PROFILES[0])); // Khevine Oliveira (ADMIN)
     }
     if (!localStorage.getItem(STORAGE_KEYS.CATEGORIES)) {
       localStorage.setItem(STORAGE_KEYS.CATEGORIES, JSON.stringify(INITIAL_CATEGORIES));
@@ -78,7 +80,7 @@ class AppStore {
           id: 'rev-1',
           service_request_id: 'req-hist-1',
           client_id: 'prof-lucas',
-          client: INITIAL_PROFILES[0],
+          client: INITIAL_PROFILES[1],
           professional_id: 'pro-joao',
           rating: 5,
           comment: 'Serviço impecável! João chegou pontual, higienizou o Split e deixou tudo limpinho. Super recomendo em Imperatriz!',
@@ -104,6 +106,12 @@ class AppStore {
     if (!localStorage.getItem(STORAGE_KEYS.PAYMENTS)) {
       localStorage.setItem(STORAGE_KEYS.PAYMENTS, JSON.stringify([]));
     }
+  }
+
+  public resetToCleanInitialData() {
+    Object.values(STORAGE_KEYS).forEach(k => localStorage.removeItem(k));
+    this.initData();
+    this.notify();
   }
 
   public subscribe(listener: () => void) {
@@ -151,11 +159,28 @@ class AppStore {
     const newCat: Category = {
       ...cat,
       id: 'cat-' + Date.now(),
+      is_active: cat.is_active ?? true,
     };
     categories.push(newCat);
     localStorage.setItem(STORAGE_KEYS.CATEGORIES, JSON.stringify(categories));
     this.notify();
     return newCat;
+  }
+
+  public toggleCategoryActive(categoryId: string): void {
+    const categories = this.getCategories();
+    const index = categories.findIndex(c => c.id === categoryId);
+    if (index !== -1) {
+      categories[index].is_active = !categories[index].is_active;
+      localStorage.setItem(STORAGE_KEYS.CATEGORIES, JSON.stringify(categories));
+      this.notify();
+    }
+  }
+
+  public deleteCategory(categoryId: string): void {
+    const categories = this.getCategories().filter(c => c.id !== categoryId);
+    localStorage.setItem(STORAGE_KEYS.CATEGORIES, JSON.stringify(categories));
+    this.notify();
   }
 
   // --- Professionals ---

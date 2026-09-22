@@ -18,6 +18,7 @@ import { useApp } from '../context/AppContext';
 import { serviceRequestService } from '../services/serviceRequestService';
 import { IMPERATRIZ_CENTER } from '../lib/initialData';
 import { geocodeAddress } from '../lib/mapbox';
+import { classifyServiceProblem, ClassificationResult } from '../lib/deterministicSearch';
 
 export const RequestServiceModal: React.FC = () => {
   const { 
@@ -42,7 +43,7 @@ export const RequestServiceModal: React.FC = () => {
   const [scheduledStart, setScheduledStart] = useState('14:00');
   const [imageUrl, setImageUrl] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [smartDiagnosis, setSmartDiagnosis] = useState<{ categorySlug: string; service: string } | null>(null);
+  const [keywordMatch, setKeywordMatch] = useState<ClassificationResult | null>(null);
 
   useEffect(() => {
     if (prefillRequestData.categorySlug) {
@@ -51,30 +52,20 @@ export const RequestServiceModal: React.FC = () => {
     if (prefillRequestData.title) {
       setTitle(prefillRequestData.title);
       setDescription(prefillRequestData.title);
-      runSmartDiagnosis(prefillRequestData.title);
+      runKeywordClassification(prefillRequestData.title);
     }
   }, [prefillRequestData]);
 
   if (!isRequestModalOpen) return null;
 
-  // Local rule-based AI diagnosis for problem description (Prompt Section 34)
-  const runSmartDiagnosis = (text: string) => {
-    const lower = text.toLowerCase();
-    if (lower.includes('ar') || lower.includes('gel') || lower.includes('split') || lower.includes('clima')) {
-      setSmartDiagnosis({ categorySlug: 'climatizacao', service: 'Manutenção de ar-condicionado' });
-      setSelectedCategorySlug('climatizacao');
-    } else if (lower.includes('luz') || lower.includes('choque') || lower.includes('fio') || lower.includes('disjuntor') || lower.includes('eletric')) {
-      setSmartDiagnosis({ categorySlug: 'eletrica', service: 'Reparo e fiação elétrica' });
-      setSelectedCategorySlug('eletrica');
-    } else if (lower.includes('vaza') || lower.includes('cano') || lower.includes('pia') || lower.includes('esgoto') || lower.includes('hidraul')) {
-      setSmartDiagnosis({ categorySlug: 'hidraulica', service: 'Conserto de vazamento hidráulico' });
-      setSelectedCategorySlug('hidraulica');
-    } else if (lower.includes('faxina') || lower.includes('limp') || lower.includes('sofa') || lower.includes('estofado')) {
-      setSmartDiagnosis({ categorySlug: 'limpeza', service: 'Higienização e Limpeza' });
-      setSelectedCategorySlug('limpeza');
-    } else if (lower.includes('pedreiro') || lower.includes('reforma') || lower.includes('piso') || lower.includes('parede')) {
-      setSmartDiagnosis({ categorySlug: 'construcao', service: 'Reforma e Alvenaria' });
-      setSelectedCategorySlug('construcao');
+  // Classificação determinística por palavras-chave cadastradas (100% sem IA)
+  const runKeywordClassification = (text: string) => {
+    const result = classifyServiceProblem(text);
+    if (result) {
+      setKeywordMatch(result);
+      setSelectedCategorySlug(result.categorySlug);
+    } else {
+      setKeywordMatch(null);
     }
   };
 
@@ -171,7 +162,7 @@ export const RequestServiceModal: React.FC = () => {
                   onChange={(e) => {
                     setDescription(e.target.value);
                     setTitle(e.target.value.slice(0, 50));
-                    runSmartDiagnosis(e.target.value);
+                    runKeywordClassification(e.target.value);
                   }}
                   placeholder="Ex: Meu ar-condicionado parou de gelar e está fazendo um barulho estranho..."
                   className="w-full bg-slate-950 text-white text-sm p-3.5 rounded-2xl border border-slate-700 focus:outline-none focus:border-orange-500 transition placeholder:text-slate-500"
@@ -195,7 +186,7 @@ export const RequestServiceModal: React.FC = () => {
                       onClick={() => {
                         setDescription(sug);
                         setTitle(sug);
-                        runSmartDiagnosis(sug);
+                        runKeywordClassification(sug);
                       }}
                       className="text-xs bg-slate-800 hover:bg-slate-700 text-slate-300 px-3 py-1.5 rounded-xl border border-slate-700/60 transition"
                     >
@@ -205,19 +196,29 @@ export const RequestServiceModal: React.FC = () => {
                 </div>
               </div>
 
-              {/* Smart Diagnosis card (Prompt Section 34) */}
-              {smartDiagnosis && (
-                <div className="p-4 bg-orange-500/10 border border-orange-500/30 rounded-2xl text-xs space-y-1 animate-in fade-in">
+              {/* Categorização determinística por palavras-chave (100% sem IA) */}
+              {keywordMatch && (
+                <div className="p-4 bg-orange-500/10 border border-orange-500/30 rounded-2xl text-xs space-y-1.5 animate-in fade-in">
                   <div className="flex items-center gap-1.5 text-orange-400 font-bold">
-                    <Sparkles className="w-4 h-4" />
-                    <span>Entendemos o que você precisa!</span>
+                    <Check className="w-4 h-4 text-emerald-400" />
+                    <span>Categoria compatível identificada:</span>
                   </div>
                   <p className="text-slate-300">
-                    Categoria sugerida: <strong className="text-white capitalize">{smartDiagnosis.categorySlug}</strong>
+                    Categoria: <strong className="text-white capitalize">{keywordMatch.categorySlug}</strong>
                   </p>
                   <p className="text-slate-300">
-                    Serviço identificado: <strong className="text-white">{smartDiagnosis.service}</strong>
+                    Serviço correspondente: <strong className="text-white">{keywordMatch.serviceTitle}</strong>
                   </p>
+                  {keywordMatch.matchedKeywords.length > 0 && (
+                    <div className="flex items-center gap-1 text-[11px] text-slate-400 pt-1 flex-wrap">
+                      <span>Termos encontrados:</span>
+                      {keywordMatch.matchedKeywords.map((kw, idx) => (
+                        <span key={idx} className="bg-slate-800 text-orange-300 px-1.5 py-0.5 rounded text-[10px]">
+                          {kw}
+                        </span>
+                      ))}
+                    </div>
+                  )}
                 </div>
               )}
             </div>

@@ -89,6 +89,16 @@ CREATE TABLE IF NOT EXISTS public.services (
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
 );
 
+-- 6.1. TABELA DE PALAVRAS-CHAVE DETERMINÍSTICAS (service_keywords)
+CREATE TABLE IF NOT EXISTS public.service_keywords (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    service_id UUID NOT NULL REFERENCES public.services(id) ON DELETE CASCADE,
+    keyword TEXT NOT NULL,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_service_keywords_keyword ON public.service_keywords (keyword);
+CREATE INDEX IF NOT EXISTS idx_service_keywords_service_id ON public.service_keywords (service_id);
+
 -- 7. TABELA DE SOLICITAÇÕES DE SERVIÇO (service_requests)
 CREATE TABLE IF NOT EXISTS public.service_requests (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
@@ -313,6 +323,7 @@ ALTER TABLE public.companies ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.company_members ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.categories ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.services ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.service_keywords ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.service_requests ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.service_request_images ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.quotes ENABLE ROW LEVEL SECURITY;
@@ -342,6 +353,7 @@ CREATE POLICY "Profissional edita seu próprio cadastro" ON public.professionals
     profile_id IN (SELECT id FROM public.profiles WHERE user_id = auth.uid())
 );
 CREATE POLICY "Serviços visíveis para todos" ON public.services FOR SELECT USING (true);
+CREATE POLICY "Palavras-chave leitura pública" ON public.service_keywords FOR SELECT USING (true);
 CREATE POLICY "Profissional gerencia seus serviços" ON public.services FOR ALL USING (
     professional_id IN (SELECT p.id FROM public.professionals p JOIN public.profiles pr ON pr.id = p.profile_id WHERE pr.user_id = auth.uid())
 );

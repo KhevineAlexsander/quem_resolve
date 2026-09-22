@@ -77,6 +77,20 @@ export const AuthModal: React.FC = () => {
             <div className="grid grid-cols-2 gap-2">
               <button
                 type="button"
+                onClick={() => handleQuickLogin('ADMIN')}
+                className="col-span-2 px-3 py-2 rounded-xl bg-red-500/20 hover:bg-red-500/30 border border-red-500/40 text-xs font-bold text-red-300 flex items-center justify-between transition"
+              >
+                <div className="flex items-center gap-2">
+                  <ShieldCheck className="w-4 h-4 text-red-400" />
+                  <div className="text-left">
+                    <div>Entrar como ADM Master</div>
+                    <div className="text-[10px] text-red-300 font-normal">khevineoliveira@gmail.com</div>
+                  </div>
+                </div>
+                <span className="text-[10px] bg-red-500 text-white px-1.5 py-0.5 rounded font-bold">Master</span>
+              </button>
+              <button
+                type="button"
                 onClick={() => handleQuickLogin('CLIENTE')}
                 className="px-2.5 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-xs font-semibold text-blue-400 flex items-center gap-1.5 transition"
               >
@@ -89,23 +103,15 @@ export const AuthModal: React.FC = () => {
                 className="px-2.5 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-xs font-semibold text-amber-400 flex items-center gap-1.5 transition"
               >
                 <Wrench className="w-3.5 h-3.5" />
-                <span>Profissional (João)</span>
+                <span>Técnico (João)</span>
               </button>
               <button
                 type="button"
                 onClick={() => handleQuickLogin('EMPRESA')}
-                className="px-2.5 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-xs font-semibold text-purple-400 flex items-center gap-1.5 transition"
+                className="col-span-2 px-2.5 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-xs font-semibold text-purple-400 flex items-center gap-1.5 transition"
               >
                 <Building2 className="w-3.5 h-3.5" />
-                <span>Empresa (ClimaTech)</span>
-              </button>
-              <button
-                type="button"
-                onClick={() => handleQuickLogin('ADMIN')}
-                className="px-2.5 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-xs font-semibold text-red-400 flex items-center gap-1.5 transition"
-              >
-                <ShieldCheck className="w-3.5 h-3.5" />
-                <span>Administrador</span>
+                <span>Empresa (ClimaTech Soluções)</span>
               </button>
             </div>
           </div>

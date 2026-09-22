@@ -34,30 +34,13 @@ export const ChatPage: React.FC = () => {
     e.preventDefault();
     if (!inputText.trim()) return;
 
-    const userMsg = messageService.sendMessage(
+    messageService.sendMessage(
       'conv-service-1',
       currentUser.id,
-      inputText
+      inputText.trim()
     );
     setMessages([...messageService.getMessages()]);
     setInputText('');
-
-    // Simulate natural professional reply after 1.5 seconds if sent by client
-    if (currentUser.role === 'CLIENTE') {
-      setIsTyping(true);
-      setTimeout(() => {
-        setIsTyping(false);
-        const replyPool = [
-          'Perfeito, já estou com todas as ferramentas e manômetro no carro.',
-          'Pode deixar, chego aí em menos de 10 minutos! Qualquer coisa pode me ligar.',
-          'Entendido! Vou levar também o capacitor novo para testar.',
-          'Cheguei na portaria, estou subindo!',
-        ];
-        const randomReply = replyPool[Math.floor(Math.random() * replyPool.length)];
-        messageService.sendMessage('conv-service-1', pro.id, randomReply);
-        setMessages([...messageService.getMessages()]);
-      }, 1500);
-    }
   };
 
   return (

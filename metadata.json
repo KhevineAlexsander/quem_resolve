@@ -2,5 +2,5 @@
   "name": "Quem Resolve",
   "description": "Serviços de verdade, com quem entende. Encontre profissionais qualificados para resolver serviços perto de você em Imperatriz - MA e região.",
   "requestFramePermissions": ["geolocation"],
-  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+  "majorCapabilities": []
 }

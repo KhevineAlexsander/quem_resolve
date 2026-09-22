@@ -92,12 +92,22 @@ export const IMPERATRIZ_CENTER = {
 
 export const INITIAL_PROFILES: Profile[] = [
   {
+    id: 'prof-master-admin',
+    user_id: 'usr-khevine',
+    full_name: 'Khevine Oliveira',
+    email: 'khevineoliveira@gmail.com',
+    phone: '(99) 99100-0001',
+    avatar_url: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&auto=format&fit=crop&q=80',
+    role: 'ADMIN',
+    created_at: new Date().toISOString(),
+  },
+  {
     id: 'prof-lucas',
     user_id: 'usr-lucas',
     full_name: 'Lucas Ferreira',
     email: 'lucas@exemplo.com',
     phone: '(99) 98452-1100',
-    avatar_url: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&auto=format&fit=crop&q=80',
+    avatar_url: 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=150&auto=format&fit=crop&q=80',
     role: 'CLIENTE',
     created_at: new Date().toISOString(),
   },
@@ -139,16 +149,6 @@ export const INITIAL_PROFILES: Profile[] = [
     phone: '(99) 3524-8899',
     avatar_url: 'https://images.unsplash.com/photo-1519085360753-af0119f7cbe7?w=150&auto=format&fit=crop&q=80',
     role: 'EMPRESA',
-    created_at: new Date().toISOString(),
-  },
-  {
-    id: 'prof-admin',
-    user_id: 'usr-admin',
-    full_name: 'Administrador Quem Resolve',
-    email: 'admin@quemresolve.com',
-    phone: '(99) 99999-0000',
-    avatar_url: 'https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?w=150&auto=format&fit=crop&q=80',
-    role: 'ADMIN',
     created_at: new Date().toISOString(),
   },
 ];

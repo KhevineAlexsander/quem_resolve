@@ -85,8 +85,22 @@ export const Navbar: React.FC<NavbarProps> = ({ onOpenRequestModal, onOpenAuthMo
                   className="absolute right-0 mt-2 w-64 bg-slate-800 border border-slate-700 rounded-xl shadow-2xl p-2 z-50 animate-in fade-in slide-in-from-top-2"
                 >
                   <div className="text-[11px] font-semibold text-slate-400 px-2 py-1 uppercase tracking-wider">
-                    Alternar Papel (Modo de Teste)
+                    Alternar Papel / Visão
                   </div>
+                  <button
+                    onClick={() => { switchRole('ADMIN'); setRoleMenuOpen(false); navigate('/admin'); }}
+                    className={`w-full text-left px-3 py-2 rounded-lg text-xs flex items-center justify-between transition ${currentUser.role === 'ADMIN' ? 'bg-orange-500/20 text-orange-400 font-semibold' : 'text-slate-200 hover:bg-slate-700'}`}
+                  >
+                    <div className="flex items-center gap-2">
+                      <ShieldCheck className="w-4 h-4 text-red-400" />
+                      <div>
+                        <div className="font-bold text-white">Khevine Oliveira</div>
+                        <div className="text-[10px] text-red-300">ADM Master • khevineoliveira@gmail.com</div>
+                      </div>
+                    </div>
+                    {currentUser.role === 'ADMIN' && <span className="text-orange-400 text-xs font-bold">✓ Ativo</span>}
+                  </button>
+
                   <button
                     onClick={() => { switchRole('CLIENTE'); setRoleMenuOpen(false); navigate('/cliente'); }}
                     className={`w-full text-left px-3 py-2 rounded-lg text-xs flex items-center justify-between transition ${currentUser.role === 'CLIENTE' ? 'bg-orange-500/20 text-orange-400 font-semibold' : 'text-slate-200 hover:bg-slate-700'}`}
@@ -127,20 +141,6 @@ export const Navbar: React.FC<NavbarProps> = ({ onOpenRequestModal, onOpenAuthMo
                       </div>
                     </div>
                     {currentUser.role === 'EMPRESA' && <span className="text-orange-400 text-xs">✓ Ativo</span>}
-                  </button>
-
-                  <button
-                    onClick={() => { switchRole('ADMIN'); setRoleMenuOpen(false); navigate('/admin'); }}
-                    className={`w-full text-left px-3 py-2 rounded-lg text-xs flex items-center justify-between transition ${currentUser.role === 'ADMIN' ? 'bg-orange-500/20 text-orange-400 font-semibold' : 'text-slate-200 hover:bg-slate-700'}`}
-                  >
-                    <div className="flex items-center gap-2">
-                      <ShieldCheck className="w-4 h-4 text-red-400" />
-                      <div>
-                        <div>Administrador Geral</div>
-                        <div className="text-[10px] text-slate-400">Comissões, Usuários e RLS</div>
-                      </div>
-                    </div>
-                    {currentUser.role === 'ADMIN' && <span className="text-orange-400 text-xs">✓ Ativo</span>}
                   </button>
                 </div>
               )}

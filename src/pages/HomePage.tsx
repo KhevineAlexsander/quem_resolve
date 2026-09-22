@@ -23,6 +23,7 @@ import { MapView } from '../components/MapView';
 import { ProfessionalCard } from '../components/ProfessionalCard';
 import { Professional } from '../types';
 import { IMPERATRIZ_COORDS } from '../lib/mapbox';
+import { findMatchingProfessionals, classifyServiceProblem } from '../lib/deterministicSearch';
 
 export const HomePage: React.FC = () => {
   const { categories, professionals, openRequestModal } = useApp();
@@ -53,15 +54,16 @@ export const HomePage: React.FC = () => {
     }
   };
 
-  const filteredPros = professionals.filter(pro => {
-    if (!selectedCategory) return true;
-    const cat = categories.find(c => c.slug === selectedCategory);
-    if (!cat) return true;
-    return pro.specialties?.some(s => 
-      s.toLowerCase().includes(cat.name.toLowerCase()) || 
-      cat.name.toLowerCase().includes(s.toLowerCase())
-    ) || (selectedCategory === 'climatizacao' && pro.id === 'pro-joao');
+  // Algoritmo determinístico de busca por palavras-chave e ranqueamento por distância/avaliação (100% sem IA)
+  const rankedResults = findMatchingProfessionals(professionals, categories, {
+    categorySlug: selectedCategory || undefined,
+    userQuery: searchProblem.trim() || undefined,
+    userLat: userCoords.latitude,
+    userLng: userCoords.longitude,
   });
+
+  const filteredPros = rankedResults.map(r => r.professional);
+  const detectedCategory = searchProblem.trim() ? classifyServiceProblem(searchProblem.trim()) : null;
 
   const getCategoryIcon = (slug: string) => {
     switch (slug) {
@@ -133,6 +135,16 @@ export const HomePage: React.FC = () => {
                   <ArrowRight className="w-4 h-4 stroke-[3]" />
                 </button>
               </form>
+
+              {/* Tag determinística da categoria identificada */}
+              {detectedCategory && (
+                <div className="flex items-center gap-2 text-xs text-slate-300 bg-slate-900/80 px-3.5 py-2 rounded-xl border border-slate-800 w-fit">
+                  <span className="text-orange-400 font-bold">Categoria detectada por palavras-chave:</span>
+                  <span className="capitalize font-semibold text-white">{detectedCategory.categorySlug}</span>
+                  <span className="text-slate-500">•</span>
+                  <span className="text-slate-400">{detectedCategory.serviceTitle}</span>
+                </div>
+              )}
 
               {/* Quick Trust badges */}
               <div className="flex flex-wrap items-center gap-4 text-xs text-slate-400 pt-2">
@@ -269,18 +281,32 @@ export const HomePage: React.FC = () => {
             {/* List of Professionals */}
             <div className="lg:col-span-5 space-y-3.5 max-h-[480px] overflow-y-auto pr-1">
               <div className="flex items-center justify-between text-xs text-slate-400 px-1">
-                <span>{filteredPros.length} profissionais encontrados</span>
+                <span>{rankedResults.length} profissionais encontrados</span>
                 <span className="text-orange-400 font-semibold">Ordenados por proximidade</span>
               </div>
 
-              {filteredPros.map((pro) => (
-                <ProfessionalCard
-                  key={pro.id}
-                  professional={pro}
-                  distanceKm={pro.id === 'pro-joao' ? 2.3 : pro.id === 'pro-marcos' ? 3.1 : 4.5}
-                  onRequestQuote={(p) => openRequestModal(selectedCategory || undefined, `Orçamento para ${p.profile?.full_name}`)}
-                />
-              ))}
+              {rankedResults.length === 0 ? (
+                <div className="p-8 text-center bg-slate-900 border border-slate-800 rounded-3xl space-y-2">
+                  <div className="text-2xl">🔍</div>
+                  <h3 className="font-bold text-sm text-slate-200">
+                    {searchProblem.trim() 
+                      ? 'Não encontramos resultados para essa busca.'
+                      : 'Nenhum profissional disponível para os filtros selecionados.'}
+                  </h3>
+                  <p className="text-xs text-slate-400">
+                    Tente buscar por outras palavras-chave como "ar condicionado", "eletricista", "vazamento" ou selecione outra categoria.
+                  </p>
+                </div>
+              ) : (
+                rankedResults.map((r) => (
+                  <ProfessionalCard
+                    key={r.professional.id}
+                    professional={r.professional}
+                    distanceKm={r.distanceKm}
+                    onRequestQuote={(p) => openRequestModal(selectedCategory || undefined, `Orçamento para ${p.profile?.full_name}`)}
+                  />
+                ))
+              )}
             </div>
           </div>
         </div>
