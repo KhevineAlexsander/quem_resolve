@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, Link } from 'react-router-dom';
 import { 
   Search, 
   MapPin, 
@@ -16,25 +16,28 @@ import {
   Hammer,
   Truck,
   Paintbrush,
-  Smartphone
+  Smartphone,
+  ChevronRight,
+  Bell,
+  Check
 } from 'lucide-react';
 import { useApp } from '../context/AppContext';
-import { MapView } from '../components/MapView';
 import { ProfessionalCard } from '../components/ProfessionalCard';
 import { Professional } from '../types';
-import { IMPERATRIZ_COORDS } from '../lib/googleMaps';
 import { findMatchingProfessionals, classifyServiceProblem } from '../lib/deterministicSearch';
+import { normalizeStatus, getStatusMeta } from '../lib/statusRules';
 
 export const HomePage: React.FC = () => {
-  const { categories, professionals, openRequestModal } = useApp();
+  const { categories, professionals, requests, openRequestModal } = useApp();
   const navigate = useNavigate();
 
   const [searchProblem, setSearchProblem] = useState('');
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
-  const [selectedPro, setSelectedPro] = useState<Professional | null>(professionals[0] || null);
-  const [userCoords, setUserCoords] = useState({
-    latitude: IMPERATRIZ_COORDS.latitude,
-    longitude: IMPERATRIZ_COORDS.longitude,
+
+  // Active ongoing request for instant tracking banner
+  const activeRequest = requests.find(r => {
+    const s = normalizeStatus(r.status);
+    return ['ON_THE_WAY', 'ARRIVED', 'IN_PROGRESS', 'SCHEDULED', 'QUOTE_RECEIVED'].includes(s);
   });
 
   const handleSearchSubmit = (e: React.FormEvent) => {
@@ -54,15 +57,12 @@ export const HomePage: React.FC = () => {
     }
   };
 
-  // Algoritmo determinístico de busca por palavras-chave e ranqueamento por distância/avaliação (100% sem IA)
+  // Motor determinístico de busca por palavras-chave e ranqueamento
   const rankedResults = findMatchingProfessionals(professionals, categories, {
     categorySlug: selectedCategory || undefined,
     userQuery: searchProblem.trim() || undefined,
-    userLat: userCoords.latitude,
-    userLng: userCoords.longitude,
   });
 
-  const filteredPros = rankedResults.map(r => r.professional);
   const detectedCategory = searchProblem.trim() ? classifyServiceProblem(searchProblem.trim()) : null;
 
   const getCategoryIcon = (slug: string) => {
@@ -86,9 +86,42 @@ export const HomePage: React.FC = () => {
 
   return (
     <div className="min-h-screen bg-slate-950 text-slate-100">
-      {/* Hero Section styled after the visual reference */}
+      {/* Ongoing Service Quick Tracker Banner (if active request exists) */}
+      {activeRequest && (
+        <div className="bg-gradient-to-r from-orange-600 via-amber-600 to-orange-600 text-slate-950 px-4 py-3 shadow-lg">
+          <div className="max-w-7xl mx-auto flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+            <div className="flex items-center gap-3">
+              <div className="w-9 h-9 rounded-xl bg-slate-950 text-orange-400 flex items-center justify-center font-bold shadow-md shrink-0">
+                <Truck className="w-5 h-5 animate-bounce" />
+              </div>
+              <div>
+                <div className="flex items-center gap-2">
+                  <span className="text-[10px] font-black uppercase px-2 py-0.5 rounded-full bg-slate-950 text-white">
+                    {getStatusMeta(activeRequest.status).badgeLabel}
+                  </span>
+                  <span className="font-bold text-xs sm:text-sm text-slate-950">
+                    {activeRequest.title}
+                  </span>
+                </div>
+                <p className="text-xs font-semibold text-slate-900 mt-0.5">
+                  {getStatusMeta(activeRequest.status).clientDescription}
+                </p>
+              </div>
+            </div>
+
+            <Link
+              to={`/solicitacoes/${activeRequest.id}`}
+              className="px-4 py-1.5 rounded-xl bg-slate-950 hover:bg-slate-900 text-white font-bold text-xs transition flex items-center gap-1.5 shadow shrink-0 self-end sm:self-auto"
+            >
+              <span>Acompanhar Linha do Tempo</span>
+              <ArrowRight className="w-3.5 h-3.5 text-orange-400" />
+            </Link>
+          </div>
+        </div>
+      )}
+
+      {/* Hero Section */}
       <section className="relative overflow-hidden pt-8 pb-14 border-b border-slate-800/80 bg-gradient-to-b from-slate-900 via-slate-900/80 to-slate-950">
-        {/* Background glow elements */}
         <div className="absolute top-0 right-1/4 w-96 h-96 bg-orange-500/10 rounded-full blur-3xl pointer-events-none"></div>
         <div className="absolute top-1/3 left-10 w-72 h-72 bg-blue-500/10 rounded-full blur-3xl pointer-events-none"></div>
 
@@ -98,55 +131,51 @@ export const HomePage: React.FC = () => {
             <div className="lg:col-span-7 space-y-6">
               <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-slate-800/90 border border-slate-700/80 text-orange-400 text-xs font-semibold shadow-inner">
                 <span className="w-2 h-2 rounded-full bg-orange-500 animate-ping"></span>
-                <span>Plataforma Oficial de Serviços em Imperatriz - MA</span>
+                <span>Atendimento Rápido em Imperatriz - MA</span>
               </div>
 
-              <h1 className="font-display font-extrabold text-3xl sm:text-4xl lg:text-5xl text-white tracking-tight leading-tight">
-                Você pede. <br />
-                <span className="bg-gradient-to-r from-orange-400 via-amber-400 to-orange-500 bg-clip-text text-transparent">
-                  Quem resolve, aparece.
-                </span>
+              <h1 className="font-display font-black text-3xl sm:text-4xl lg:text-5xl text-white tracking-tight leading-[1.15]">
+                Você pede. <br className="hidden sm:inline" />
+                <span className="text-orange-500">Quem resolve,</span> aparece.
               </h1>
 
-              <p className="text-sm sm:text-base text-slate-300 max-w-xl leading-relaxed">
-                Encontre em minutos técnicos de ar-condicionado, eletricistas, encanadores, diaristas e empresas de manutenção verificadas em Imperatriz e região com garantia e rastreamento ao vivo.
+              <p className="text-slate-300 text-sm sm:text-base max-w-xl leading-relaxed">
+                Encontre eletricistas, técnicos de ar-condicionado, encanadores e prestadores qualificados. Receba orçamentos e acompanhe cada etapa do seu serviço em tempo real.
               </p>
 
-              {/* Main Search Input Form */}
-              <form 
-                onSubmit={handleSearchSubmit}
-                className="bg-slate-900/90 p-2 rounded-2xl border border-slate-700/90 shadow-2xl flex flex-col sm:flex-row gap-2 max-w-xl backdrop-blur-md"
-              >
-                <div className="relative flex-1 flex items-center">
-                  <Search className="w-5 h-5 text-orange-400 absolute left-3.5 pointer-events-none" />
+              {/* Search Box */}
+              <form onSubmit={handleSearchSubmit} className="space-y-3">
+                <div className="relative flex items-center">
+                  <div className="absolute left-4 text-orange-400">
+                    <Search className="w-5 h-5" />
+                  </div>
                   <input
                     type="text"
                     value={searchProblem}
                     onChange={(e) => setSearchProblem(e.target.value)}
-                    placeholder="Qual problema precisa resolver? Ex: Ar parou de gelar..."
-                    className="w-full bg-transparent text-white text-xs sm:text-sm pl-11 pr-3 py-3 focus:outline-none placeholder:text-slate-400"
+                    placeholder="Ex: Instalar ar-condicionado, trocar disjuntor, vazamento..."
+                    className="w-full pl-12 pr-28 py-3.5 rounded-2xl bg-slate-900/90 border-2 border-slate-700 text-white placeholder-slate-400 text-xs sm:text-sm focus:outline-none focus:border-orange-500 transition shadow-xl"
                   />
+                  <button
+                    type="submit"
+                    className="absolute right-2 px-4 py-2 rounded-xl bg-orange-500 hover:bg-orange-600 text-slate-950 font-bold text-xs sm:text-sm transition shadow-md shadow-orange-500/20 cursor-pointer"
+                  >
+                    Buscar
+                  </button>
                 </div>
-                <button
-                  type="submit"
-                  className="px-6 py-3.5 rounded-xl bg-gradient-to-r from-orange-500 to-amber-500 hover:from-orange-600 hover:to-amber-600 text-slate-950 font-extrabold text-xs sm:text-sm shadow-lg shadow-orange-500/30 transition active:scale-95 flex items-center justify-center gap-2 cursor-pointer shrink-0"
-                >
-                  <span>Pedir Orçamento</span>
-                  <ArrowRight className="w-4 h-4 stroke-[3]" />
-                </button>
+
+                {/* Instant Problem Classifier Badge */}
+                {detectedCategory && (
+                  <div className="flex items-center gap-2 text-xs bg-orange-500/10 border border-orange-500/20 text-orange-300 px-3 py-1.5 rounded-xl animate-in fade-in">
+                    <Sparkles className="w-3.5 h-3.5 text-orange-400 shrink-0" />
+                    <span>
+                      Identificamos interesse em: <strong>{detectedCategory.categoryName}</strong>. Clique em buscar para solicitar orçamentos.
+                    </span>
+                  </div>
+                )}
               </form>
 
-              {/* Tag determinística da categoria identificada */}
-              {detectedCategory && (
-                <div className="flex items-center gap-2 text-xs text-slate-300 bg-slate-900/80 px-3.5 py-2 rounded-xl border border-slate-800 w-fit">
-                  <span className="text-orange-400 font-bold">Categoria detectada por palavras-chave:</span>
-                  <span className="capitalize font-semibold text-white">{detectedCategory.categorySlug}</span>
-                  <span className="text-slate-500">•</span>
-                  <span className="text-slate-400">{detectedCategory.serviceTitle}</span>
-                </div>
-              )}
-
-              {/* Quick Trust badges */}
+              {/* Feature Badges */}
               <div className="flex flex-wrap items-center gap-4 text-xs text-slate-400 pt-2">
                 <span className="flex items-center gap-1.5">
                   <ShieldCheck className="w-4 h-4 text-emerald-400" />
@@ -154,26 +183,26 @@ export const HomePage: React.FC = () => {
                 </span>
                 <span className="flex items-center gap-1.5">
                   <Clock className="w-4 h-4 text-orange-400" />
-                  Atendimento em até 30 minutos
+                  Linha do Tempo em Tempo Real
                 </span>
                 <span className="flex items-center gap-1.5">
                   <CreditCard className="w-4 h-4 text-blue-400" />
-                  Pagamento Seguro e Garantia
+                  Garantia do Serviço
                 </span>
               </div>
             </div>
 
-            {/* Right Hero: Highlighted Verified Professional Card (matching the image) */}
+            {/* Right Hero: Featured Professional Card */}
             <div className="lg:col-span-5 flex justify-center">
-              <div className="w-full max-w-sm">
-                <div className="text-[11px] font-bold text-orange-400 uppercase tracking-wider mb-2 flex items-center gap-1.5">
+              <div className="w-full max-w-sm space-y-3">
+                <div className="text-[11px] font-bold text-orange-400 uppercase tracking-wider flex items-center gap-1.5">
                   <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
-                  Técnico disponível agora perto de você:
+                  Técnico destaque disponível em Imperatriz:
                 </div>
                 {professionals[0] && (
                   <ProfessionalCard
                     professional={professionals[0]}
-                    distanceKm={2.3}
+                    distanceKm={1.8}
                     onRequestQuote={(pro) => openRequestModal('climatizacao', `Solicitação de orçamento com ${pro.profile?.full_name}`)}
                   />
                 )}
@@ -183,7 +212,7 @@ export const HomePage: React.FC = () => {
         </div>
       </section>
 
-      {/* Categories Grid (Prompt Section 8) */}
+      {/* Categories Grid */}
       <section className="py-10 bg-slate-900/50 border-b border-slate-800">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex items-center justify-between mb-6">
@@ -192,13 +221,13 @@ export const HomePage: React.FC = () => {
                 Categorias Mais Solicitadas
               </h2>
               <p className="text-xs text-slate-400 mt-0.5">
-                Escolha o serviço ou deixe nossa IA identificar o especialista ideal
+                Escolha o serviço desejado em Imperatriz e região
               </p>
             </div>
             {selectedCategory && (
               <button
                 onClick={() => setSelectedCategory(null)}
-                className="text-xs text-orange-400 hover:underline"
+                className="text-xs text-orange-400 hover:underline cursor-pointer"
               >
                 Limpar filtro
               </button>
@@ -236,178 +265,109 @@ export const HomePage: React.FC = () => {
         </div>
       </section>
 
-      {/* Interactive Map & Nearby Professionals Section (Prompt Section 5 & 14) */}
+      {/* Verified Professionals Showcase */}
       <section className="py-12 bg-slate-950">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex flex-col md:flex-row md:items-end justify-between mb-6 gap-4">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 space-y-6">
+          <div className="flex flex-col md:flex-row md:items-end justify-between gap-4">
             <div>
               <div className="inline-flex items-center gap-1.5 text-xs font-bold text-orange-400 uppercase tracking-wider mb-1">
-                <MapPin className="w-3.5 h-3.5 text-orange-500" />
-                Rastreamento e Proximidade
+                <ShieldCheck className="w-3.5 h-3.5 text-orange-500" />
+                Profissionais Verificados
               </div>
               <h2 className="font-display font-extrabold text-2xl text-white">
-                Profissionais Próximos no Mapa de Imperatriz
+                Especialistas Recomendados em Imperatriz - MA
               </h2>
               <p className="text-xs text-slate-400 mt-1">
-                Veja a localização dos prestadores em tempo real nos bairros Centro, Juçara, Bacuri e Nova Imperatriz.
+                Profissionais avaliados nos bairros Centro, Juçara, Bacuri, Nova Imperatriz e Beira Rio.
               </p>
             </div>
 
             <div className="flex items-center gap-2">
               <button
                 onClick={() => openRequestModal(selectedCategory || undefined)}
-                className="px-4 py-2 rounded-xl bg-orange-500 hover:bg-orange-600 text-slate-950 font-bold text-xs transition flex items-center gap-1.5 shadow-md shadow-orange-500/20 cursor-pointer"
+                className="px-4 py-2.5 rounded-xl bg-orange-500 hover:bg-orange-600 text-slate-950 font-bold text-xs transition flex items-center gap-1.5 shadow-md shadow-orange-500/20 cursor-pointer"
               >
-                <span>Solicitar Chamado Geral</span>
+                <span>Criar Nova Solicitação</span>
                 <ArrowRight className="w-3.5 h-3.5" />
               </button>
             </div>
           </div>
 
-          {/* Two-column layout: Map on Left, Nearby Cards on Right */}
-          <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
-            {/* Map Container */}
-            <div className="lg:col-span-7">
-              <MapView
-                professionals={filteredPros}
-                selectedProfessionalId={selectedPro?.id}
-                onSelectProfessional={(pro) => setSelectedPro(pro)}
-                userCoordinates={userCoords}
-                onUserCoordinatesChange={(coords) => setUserCoords(coords)}
-                heightClass="h-[480px]"
-              />
-            </div>
-
-            {/* List of Professionals */}
-            <div className="lg:col-span-5 space-y-3.5 max-h-[480px] overflow-y-auto pr-1">
-              <div className="flex items-center justify-between text-xs text-slate-400 px-1">
-                <span>{rankedResults.length} profissionais encontrados</span>
-                <span className="text-orange-400 font-semibold">Ordenados por proximidade</span>
+          {/* Professionals Grid */}
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            {rankedResults.map(({ professional, distanceKm, matchReason }) => (
+              <div key={professional.id} className="space-y-2">
+                {matchReason && (
+                  <div className="text-[11px] text-orange-400 font-semibold px-2">
+                    {matchReason}
+                  </div>
+                )}
+                <ProfessionalCard
+                  professional={professional}
+                  distanceKm={distanceKm}
+                  onRequestQuote={(pro) => openRequestModal(selectedCategory || undefined, `Solicitação de orçamento com ${pro.profile?.full_name}`)}
+                />
               </div>
-
-              {rankedResults.length === 0 ? (
-                <div className="p-8 text-center bg-slate-900 border border-slate-800 rounded-3xl space-y-2">
-                  <div className="text-2xl">🔍</div>
-                  <h3 className="font-bold text-sm text-slate-200">
-                    {searchProblem.trim() 
-                      ? 'Não encontramos resultados para essa busca.'
-                      : 'Nenhum profissional disponível para os filtros selecionados.'}
-                  </h3>
-                  <p className="text-xs text-slate-400">
-                    Tente buscar por outras palavras-chave como "ar condicionado", "eletricista", "vazamento" ou selecione outra categoria.
-                  </p>
-                </div>
-              ) : (
-                rankedResults.map((r) => (
-                  <ProfessionalCard
-                    key={r.professional.id}
-                    professional={r.professional}
-                    distanceKm={r.distanceKm}
-                    onRequestQuote={(p) => openRequestModal(selectedCategory || undefined, `Orçamento para ${p.profile?.full_name}`)}
-                  />
-                ))
-              )}
-            </div>
+            ))}
           </div>
         </div>
       </section>
 
-      {/* How it works Section */}
-      <section className="py-14 bg-slate-900 border-t border-slate-800">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="text-center max-w-2xl mx-auto mb-12">
+      {/* How It Works Section with Timeline Preview */}
+      <section className="py-14 bg-slate-900/60 border-t border-slate-800">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 space-y-10">
+          <div className="text-center max-w-2xl mx-auto space-y-2">
             <span className="text-xs font-bold text-orange-400 uppercase tracking-wider">
-              Simples, Rápido e Seguro
+              Como Funciona o Quem Resolve
             </span>
-            <h2 className="font-display font-extrabold text-2xl sm:text-3xl text-white mt-1">
-              Como funciona o Quem Resolve?
+            <h2 className="text-2xl sm:text-3xl font-black font-display text-white">
+              Acompanhamento Completo em 4 Passos
             </h2>
-            <p className="text-xs sm:text-sm text-slate-400 mt-2">
-              Da solicitação ao pagamento, tudo é feito pelo aplicativo com total transparência
+            <p className="text-xs sm:text-sm text-slate-400">
+              Do pedido à conclusão, você acompanha cada etapa com transparência e notificações em tempo real.
             </p>
           </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
-            <div className="p-6 rounded-3xl bg-slate-950 border border-slate-800 relative">
-              <span className="text-3xl font-extrabold text-orange-500/30 absolute top-4 right-4">
-                01
-              </span>
-              <div className="w-12 h-12 rounded-2xl bg-orange-500/20 text-orange-400 flex items-center justify-center font-bold text-lg mb-4">
-                📝
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+            <div className="p-6 rounded-2xl bg-slate-900 border border-slate-800 space-y-3 relative">
+              <div className="w-10 h-10 rounded-xl bg-blue-500/10 text-blue-400 flex items-center justify-center font-bold text-sm border border-blue-500/20">
+                1
               </div>
-              <h3 className="font-bold text-base text-white mb-1">1. Peça o Serviço</h3>
+              <h3 className="font-bold text-white text-base">Crie a Solicitação</h3>
               <p className="text-xs text-slate-400 leading-relaxed">
-                Descreva o problema com fotos ou escolha uma categoria. Nossa plataforma localiza os profissionais mais próximos em Imperatriz.
+                Descreva o problema, informe seu endereço em Imperatriz e defina a data desejada.
               </p>
             </div>
 
-            <div className="p-6 rounded-3xl bg-slate-950 border border-slate-800 relative">
-              <span className="text-3xl font-extrabold text-orange-500/30 absolute top-4 right-4">
-                02
-              </span>
-              <div className="w-12 h-12 rounded-2xl bg-blue-500/20 text-blue-400 flex items-center justify-center font-bold text-lg mb-4">
-                💬
+            <div className="p-6 rounded-2xl bg-slate-900 border border-slate-800 space-y-3 relative">
+              <div className="w-10 h-10 rounded-xl bg-amber-500/10 text-amber-400 flex items-center justify-center font-bold text-sm border border-amber-500/20">
+                2
               </div>
-              <h3 className="font-bold text-base text-white mb-1">2. Receba Orçamentos</h3>
+              <h3 className="font-bold text-white text-base">Receba Propostas</h3>
               <p className="text-xs text-slate-400 leading-relaxed">
-                Compare preços, prazos, avaliações e perfis verificados. Aprove o melhor orçamento com 1 clique.
+                Técnicos avaliam e enviam orçamentos com valor e horários. Escolha o melhor para você.
               </p>
             </div>
 
-            <div className="p-6 rounded-3xl bg-slate-950 border border-slate-800 relative">
-              <span className="text-3xl font-extrabold text-orange-500/30 absolute top-4 right-4">
-                03
-              </span>
-              <div className="w-12 h-12 rounded-2xl bg-amber-500/20 text-amber-400 flex items-center justify-center font-bold text-lg mb-4">
-                🚗
+            <div className="p-6 rounded-2xl bg-slate-900 border border-slate-800 space-y-3 relative">
+              <div className="w-10 h-10 rounded-xl bg-orange-500/10 text-orange-400 flex items-center justify-center font-bold text-sm border border-orange-500/20">
+                3
               </div>
-              <h3 className="font-bold text-base text-white mb-1">3. Acompanhe no Mapa</h3>
+              <h3 className="font-bold text-white text-base">Linha do Tempo</h3>
               <p className="text-xs text-slate-400 leading-relaxed">
-                Veja o técnico se deslocando até sua casa em tempo real com previsão exata de chegada em minutos.
+                Saiba quando o técnico saiu a caminho, quando chegou ao local e quando iniciou o serviço.
               </p>
             </div>
 
-            <div className="p-6 rounded-3xl bg-slate-950 border border-slate-800 relative">
-              <span className="text-3xl font-extrabold text-orange-500/30 absolute top-4 right-4">
-                04
-              </span>
-              <div className="w-12 h-12 rounded-2xl bg-emerald-500/20 text-emerald-400 flex items-center justify-center font-bold text-lg mb-4">
-                🛡️
+            <div className="p-6 rounded-2xl bg-slate-900 border border-slate-800 space-y-3 relative">
+              <div className="w-10 h-10 rounded-xl bg-emerald-500/10 text-emerald-400 flex items-center justify-center font-bold text-sm border border-emerald-500/20">
+                4
               </div>
-              <h3 className="font-bold text-base text-white mb-1">4. Pague com Garantia</h3>
+              <h3 className="font-bold text-white text-base">Conclusão e Avaliação</h3>
               <p className="text-xs text-slate-400 leading-relaxed">
-                Pague pelo aplicativo somente após o serviço ser realizado. Todos os serviços contam com 90 dias de garantia.
+                Serviço realizado com qualidade garantida. Avalie o profissional e fortaleça a comunidade local.
               </p>
             </div>
-          </div>
-        </div>
-      </section>
-
-      {/* Call to action for Professionals and Companies */}
-      <section className="py-12 bg-gradient-to-r from-orange-600 via-amber-600 to-orange-500 text-slate-950">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex flex-col md:flex-row items-center justify-between gap-6">
-          <div className="space-y-1">
-            <h3 className="font-display font-black text-2xl sm:text-3xl tracking-tight">
-              Você é um profissional autônomo ou tem uma empresa?
-            </h3>
-            <p className="text-xs sm:text-sm font-semibold opacity-90 max-w-2xl">
-              Cadastre-se no Quem Resolve para receber chamados diários de clientes em Imperatriz - MA com pagamento garantido.
-            </p>
-          </div>
-
-          <div className="flex items-center gap-3 shrink-0">
-            <button
-              onClick={() => navigate('/profissional')}
-              className="px-5 py-3 rounded-xl bg-slate-950 text-white font-bold text-xs sm:text-sm shadow-xl hover:bg-slate-900 transition"
-            >
-              Quero ser Profissional
-            </button>
-            <button
-              onClick={() => navigate('/empresa')}
-              className="px-5 py-3 rounded-xl bg-white text-slate-950 font-bold text-xs sm:text-sm shadow-xl hover:bg-slate-100 transition"
-            >
-              Cadastrar Empresa
-            </button>
           </div>
         </div>
       </section>

@@ -1,6 +1,6 @@
 import { appStore } from '../lib/store';
 import { supabase, isSupabaseConfigured } from '../lib/supabase';
-import { ServiceRequest, ServiceRequestStatus } from '../types';
+import { ServiceRequest, ServiceRequestStatus, ServiceTrackingStatus, ServiceStatusHistory } from '../types';
 
 export const serviceRequestService = {
   getAll(): ServiceRequest[] {
@@ -15,14 +15,25 @@ export const serviceRequestService = {
     return appStore.getRequests().filter(r => r.client_id === clientId);
   },
 
+  getStatusHistory(requestId: string): ServiceStatusHistory[] {
+    return appStore.getStatusHistory(requestId);
+  },
+
   async create(data: {
     client_id: string;
     category_id: string;
     title: string;
     description: string;
     address: string;
-    latitude: number;
-    longitude: number;
+    street?: string;
+    number?: string;
+    neighborhood?: string;
+    complement?: string;
+    city?: string;
+    state?: string;
+    cep?: string;
+    latitude?: number;
+    longitude?: number;
     urgency: 'normal' | 'urgent';
     scheduled_date?: string;
     scheduled_start?: string;
@@ -45,12 +56,19 @@ export const serviceRequestService = {
       category_id: data.category_id,
       title: data.title,
       description: data.description,
-      status: 'pending',
+      status: 'REQUESTED',
       scheduled_date: data.scheduled_date || new Date().toISOString().split('T')[0],
       scheduled_start: data.scheduled_start || '09:00',
       address: data.address,
-      latitude: data.latitude,
-      longitude: data.longitude,
+      street: data.street,
+      number: data.number,
+      neighborhood: data.neighborhood,
+      complement: data.complement,
+      city: data.city || 'Imperatriz',
+      state: data.state || 'MA',
+      cep: data.cep,
+      latitude: data.latitude || -5.5266,
+      longitude: data.longitude || -47.4797,
       urgency: data.urgency,
       images,
     });
@@ -66,8 +84,6 @@ export const serviceRequestService = {
             description: newReq.description,
             status: newReq.status,
             address: newReq.address,
-            latitude: newReq.latitude,
-            longitude: newReq.longitude,
             urgency: newReq.urgency,
           },
         ]);
@@ -79,7 +95,29 @@ export const serviceRequestService = {
     return newReq;
   },
 
-  updateStatus(id: string, status: ServiceRequestStatus) {
-    appStore.updateRequestStatus(id, status);
+  updateStatus(
+    id: string, 
+    status: ServiceTrackingStatus | string, 
+    proName?: string,
+    customDescription?: string
+  ): { success: boolean; error?: string } {
+    const result = appStore.updateRequestStatus(id, status, proName, customDescription);
+    
+    if (isSupabaseConfigured() && supabase && result.success) {
+      try {
+        supabase.from('service_requests').update({ status, updated_at: new Date().toISOString() }).eq('id', id);
+        supabase.from('service_status_history').insert([
+          {
+            service_request_id: id,
+            status,
+            created_at: new Date().toISOString(),
+          }
+        ]);
+      } catch (e) {
+        console.warn('Supabase status update error:', e);
+      }
+    }
+
+    return result;
   },
 };

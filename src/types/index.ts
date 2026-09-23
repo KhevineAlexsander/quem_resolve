@@ -79,7 +79,22 @@ export interface Service {
   created_at: string;
 }
 
+// Status oficiais do ciclo de vida e linha do tempo de serviço
+export type ServiceTrackingStatus =
+  | 'REQUESTED'
+  | 'PROFESSIONALS_NOTIFIED'
+  | 'QUOTE_RECEIVED'
+  | 'PROFESSIONAL_SELECTED'
+  | 'SCHEDULED'
+  | 'ON_THE_WAY'
+  | 'ARRIVED'
+  | 'IN_PROGRESS'
+  | 'COMPLETED'
+  | 'CANCELLED';
+
+// Compatibilidade de status legados e novos
 export type ServiceRequestStatus =
+  | ServiceTrackingStatus
   | 'pending'
   | 'searching'
   | 'quotes_received'
@@ -88,6 +103,16 @@ export type ServiceRequestStatus =
   | 'in_progress'
   | 'completed'
   | 'cancelled';
+
+export interface ServiceStatusHistory {
+  id: string;
+  service_request_id: string;
+  status: ServiceTrackingStatus;
+  title: string;
+  description: string;
+  created_at: string;
+  created_by?: string;
+}
 
 export interface ServiceRequest {
   id: string;
@@ -102,11 +127,21 @@ export interface ServiceRequest {
   scheduled_start?: string;
   scheduled_end?: string;
   address: string;
-  latitude: number;
-  longitude: number;
+  street?: string;
+  number?: string;
+  complement?: string;
+  neighborhood?: string;
+  city?: string;
+  state?: string;
+  cep?: string;
+  latitude?: number;
+  longitude?: number;
   urgency: 'normal' | 'urgent';
+  selected_professional_id?: string;
+  selected_professional?: Professional;
   images?: ServiceRequestImage[];
   quotes?: Quote[];
+  status_history?: ServiceStatusHistory[];
   created_at: string;
   updated_at: string;
 }
@@ -176,7 +211,12 @@ export interface Notification {
   title: string;
   message: string;
   type: string;
-  data?: Record<string, any>;
+  data?: {
+    service_request_id?: string;
+    status?: ServiceTrackingStatus | string;
+    url?: string;
+    [key: string]: any;
+  };
   read_at?: string;
   created_at: string;
 }
@@ -200,17 +240,6 @@ export interface Favorite {
   created_at: string;
 }
 
-export interface ServiceTracking {
-  id: string;
-  service_request_id: string;
-  professional_id: string;
-  latitude: number;
-  longitude: number;
-  accuracy?: number;
-  eta_minutes?: number;
-  recorded_at: string;
-}
-
 export interface Payment {
   id: string;
   service_request_id: string;
@@ -228,4 +257,14 @@ export interface PlatformSetting {
   key: string;
   value: string;
   description?: string;
+}
+
+export interface ServiceTracking {
+  id: string;
+  service_request_id: string;
+  status: ServiceTrackingStatus | ServiceRequestStatus;
+  updated_at: string;
+  latitude?: number;
+  longitude?: number;
+  eta_minutes?: number;
 }

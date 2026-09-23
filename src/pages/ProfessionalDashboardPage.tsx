@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, Link } from 'react-router-dom';
 import { 
   Wrench, 
   Power, 
@@ -8,19 +8,26 @@ import {
   Clock, 
   DollarSign, 
   CheckCircle2, 
-  Navigation, 
+  Truck, 
   Send, 
-  MessageSquare,
-  AlertTriangle,
-  FileText,
-  ShieldCheck,
-  TrendingUp,
-  Wallet
+  MessageSquare, 
+  AlertTriangle, 
+  FileText, 
+  ShieldCheck, 
+  TrendingUp, 
+  Wallet,
+  Copy,
+  Check,
+  Play,
+  ArrowRight,
+  User
 } from 'lucide-react';
 import { useApp } from '../context/AppContext';
 import { quoteService } from '../services/quoteService';
 import { serviceRequestService } from '../services/serviceRequestService';
 import { professionalService } from '../services/professionalService';
+import { ServiceTrackingStatus } from '../types';
+import { normalizeStatus, getStatusMeta, getProfessionalNextAction } from '../lib/statusRules';
 
 export const ProfessionalDashboardPage: React.FC = () => {
   const { requests, professionals, currentUser, refreshData } = useApp();
@@ -33,6 +40,8 @@ export const ProfessionalDashboardPage: React.FC = () => {
   const [quoteDuration, setQuoteDuration] = useState('1 hora e meia');
   const [quoteDescription, setQuoteDescription] = useState('Diagnóstico completo, limpeza e carga de gás.');
   const [isSendingQuote, setIsSendingQuote] = useState(false);
+  const [copiedId, setCopiedId] = useState<string | null>(null);
+  const [statusError, setStatusError] = useState<string | null>(null);
 
   const handleToggleAvailability = () => {
     const next = !isAvailable;
@@ -59,22 +68,50 @@ export const ProfessionalDashboardPage: React.FC = () => {
     refreshData();
   };
 
-  const handleUpdateStatus = (reqId: string, status: any) => {
-    serviceRequestService.updateStatus(reqId, status);
-    refreshData();
+  const handleAdvanceStatus = (reqId: string, nextStatus: ServiceTrackingStatus) => {
+    setStatusError(null);
+    const result = serviceRequestService.updateStatus(reqId, nextStatus, pro.profile?.full_name);
+    if (!result.success) {
+      setStatusError(result.error || 'Erro ao atualizar status.');
+      setTimeout(() => setStatusError(null), 4000);
+    } else {
+      refreshData();
+    }
   };
 
-  const activeJobs = requests.filter(r => 
-    r.status === 'accepted' || 
-    r.status === 'professional_on_way' || 
-    r.status === 'in_progress'
-  );
+  const handleCopyAddress = (address: string, id: string) => {
+    navigator.clipboard.writeText(address);
+    setCopiedId(id);
+    setTimeout(() => setCopiedId(null), 2000);
+  };
 
-  const pendingRequests = requests.filter(r => r.status === 'pending');
+  // Jobs assigned to or chosen for this professional
+  const myAssignedJobs = requests.filter(r => {
+    const norm = normalizeStatus(r.status);
+    return ['PROFESSIONAL_SELECTED', 'SCHEDULED', 'ON_THE_WAY', 'ARRIVED', 'IN_PROGRESS'].includes(norm);
+  });
+
+  const pendingRequests = requests.filter(r => {
+    const norm = normalizeStatus(r.status);
+    return ['REQUESTED', 'PROFESSIONALS_NOTIFIED', 'QUOTE_RECEIVED'].includes(norm);
+  });
 
   return (
     <div className="min-h-screen bg-slate-950 text-slate-100 py-8">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 space-y-8">
+        {/* Error Toast */}
+        {statusError && (
+          <div className="p-4 rounded-2xl bg-rose-500/20 border border-rose-500/40 text-rose-300 flex items-center justify-between gap-3 animate-in fade-in">
+            <div className="flex items-center gap-2">
+              <AlertTriangle className="w-5 h-5 text-rose-400 shrink-0" />
+              <span className="text-xs font-semibold">{statusError}</span>
+            </div>
+            <button onClick={() => setStatusError(null)} className="text-xs font-bold text-rose-400">
+              ✕
+            </button>
+          </div>
+        )}
+
         {/* Top Profile & Availability Bar */}
         <div className="bg-slate-900 border border-slate-800 rounded-3xl p-6 shadow-xl flex flex-col md:flex-row items-start md:items-center justify-between gap-6">
           <div className="flex items-center gap-4">
@@ -109,7 +146,7 @@ export const ProfessionalDashboardPage: React.FC = () => {
                 <span className="text-slate-500">•</span>
                 <span className="text-slate-300 flex items-center gap-1">
                   <MapPin className="w-3.5 h-3.5 text-orange-400" />
-                  Raio de {pro?.service_radius_km || 25} km
+                  Atendendo em Imperatriz e Região
                 </span>
               </div>
             </div>
@@ -126,7 +163,7 @@ export const ProfessionalDashboardPage: React.FC = () => {
 
             <button
               onClick={handleToggleAvailability}
-              className={`p-3 rounded-xl transition flex items-center gap-2 font-bold text-xs ${
+              className={`p-3 rounded-xl transition flex items-center gap-2 font-bold text-xs cursor-pointer ${
                 isAvailable
                   ? 'bg-emerald-500 text-slate-950 shadow-lg shadow-emerald-500/20'
                   : 'bg-slate-800 text-slate-400 hover:bg-slate-700'
@@ -138,7 +175,7 @@ export const ProfessionalDashboardPage: React.FC = () => {
           </div>
         </div>
 
-        {/* Financial KPI Cards (Prompt Section 18) */}
+        {/* Financial KPI Cards */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
           <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5">
             <div className="flex items-center justify-between text-slate-400 text-xs font-medium">
@@ -165,7 +202,7 @@ export const ProfessionalDashboardPage: React.FC = () => {
               <span>Serviços Realizados</span>
               <CheckCircle2 className="w-4 h-4 text-blue-400" />
             </div>
-            <div className="text-2xl font-extrabold text-white mt-2">28 atendimentos</div>
+            <div className="text-2xl font-extrabold text-white mt-2">342 atendimentos</div>
             <div className="text-[11px] text-slate-400 mt-1">Taxa de conclusão de 100%</div>
           </div>
 
@@ -179,94 +216,130 @@ export const ProfessionalDashboardPage: React.FC = () => {
           </div>
         </div>
 
-        {/* Active In-Progress Jobs Controls (Prompt Section 14) */}
-        {activeJobs.length > 0 && (
-          <div className="space-y-4">
+        {/* Active In-Progress Jobs Controls (Prompt Section 8 & 19) */}
+        <div className="space-y-4">
+          <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">
               <span className="w-2.5 h-2.5 rounded-full bg-orange-500 animate-ping"></span>
               <h2 className="font-bold text-lg text-white">
-                Atendimento em Andamento (Ações do Técnico)
+                Serviços de Hoje / Ordens em Andamento ({myAssignedJobs.length})
               </h2>
             </div>
-
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              {activeJobs.map(job => (
-                <div
-                  key={job.id}
-                  className="bg-slate-900 border-2 border-orange-500/50 rounded-3xl p-6 space-y-4 shadow-xl shadow-orange-500/10"
-                >
-                  <div className="flex items-start justify-between">
-                    <div>
-                      <h3 className="font-bold text-base text-white">{job.title}</h3>
-                      <p className="text-xs text-slate-400 mt-0.5">{job.description}</p>
-                    </div>
-                    <span className="px-2.5 py-1 rounded-full bg-orange-500/20 text-orange-400 text-xs font-bold uppercase">
-                      {job.status}
-                    </span>
-                  </div>
-
-                  <div className="text-xs text-slate-300 space-y-1 bg-slate-950 p-3 rounded-xl border border-slate-800">
-                    <div className="flex items-center gap-1.5">
-                      <MapPin className="w-3.5 h-3.5 text-orange-400" />
-                      <span>{job.address}</span>
-                    </div>
-                    <div className="flex items-center gap-1.5 text-slate-400">
-                      <Clock className="w-3.5 h-3.5" />
-                      <span>Agendado para: {job.scheduled_date} às {job.scheduled_start}</span>
-                    </div>
-                  </div>
-
-                  {/* Actions according to current step */}
-                  <div className="space-y-2 pt-2 border-t border-slate-800">
-                    <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider block">
-                      Avançar status do chamado:
-                    </span>
-
-                    <div className="flex flex-wrap gap-2">
-                      {job.status === 'accepted' && (
-                        <button
-                          onClick={() => handleUpdateStatus(job.id, 'professional_on_way')}
-                          className="flex-1 py-2.5 px-3 rounded-xl bg-orange-500 hover:bg-orange-600 text-slate-950 font-bold text-xs transition flex items-center justify-center gap-1.5"
-                        >
-                          <Navigation className="w-4 h-4" />
-                          <span>Iniciar Deslocamento (A Caminho)</span>
-                        </button>
-                      )}
-
-                      {job.status === 'professional_on_way' && (
-                        <button
-                          onClick={() => handleUpdateStatus(job.id, 'in_progress')}
-                          className="flex-1 py-2.5 px-3 rounded-xl bg-amber-500 hover:bg-amber-600 text-slate-950 font-bold text-xs transition flex items-center justify-center gap-1.5"
-                        >
-                          <CheckCircle2 className="w-4 h-4" />
-                          <span>Cheguei no Local (Iniciar Atendimento)</span>
-                        </button>
-                      )}
-
-                      {job.status === 'in_progress' && (
-                        <button
-                          onClick={() => handleUpdateStatus(job.id, 'completed')}
-                          className="flex-1 py-2.5 px-3 rounded-xl bg-emerald-500 hover:bg-emerald-600 text-slate-950 font-bold text-xs transition flex items-center justify-center gap-1.5"
-                        >
-                          <CheckCircle2 className="w-4 h-4" />
-                          <span>Concluir Serviço & Solicitar Pagamento</span>
-                        </button>
-                      )}
-
-                      <button
-                        onClick={() => navigate('/chat')}
-                        className="py-2.5 px-3 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-semibold flex items-center gap-1.5"
-                      >
-                        <MessageSquare className="w-4 h-4 text-orange-400" />
-                        <span>Chat com Cliente</span>
-                      </button>
-                    </div>
-                  </div>
-                </div>
-              ))}
-            </div>
+            <span className="text-xs text-slate-400">
+              Acompanhamento determinístico por status
+            </span>
           </div>
-        )}
+
+          {myAssignedJobs.length === 0 ? (
+            <div className="p-8 text-center bg-slate-900/60 rounded-3xl border border-slate-800 text-slate-400 text-xs">
+              Nenhum serviço em execução no momento. Envie propostas para os chamados disponíveis abaixo.
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              {myAssignedJobs.map(job => {
+                const normStatus = normalizeStatus(job.status);
+                const meta = getStatusMeta(normStatus);
+                const nextAction = getProfessionalNextAction(normStatus);
+
+                return (
+                  <div
+                    key={job.id}
+                    className="bg-slate-900 border-2 border-orange-500/50 rounded-3xl p-6 space-y-4 shadow-xl shadow-orange-950/20"
+                  >
+                    <div className="flex items-start justify-between gap-2">
+                      <div>
+                        <span className="text-[10px] font-mono font-bold text-orange-400 uppercase">
+                          SERVIÇO #{job.id.replace('req-', '').substring(0, 6)}
+                        </span>
+                        <h3 className="font-bold text-base text-white mt-0.5">{job.title}</h3>
+                        <div className="flex items-center gap-1.5 text-xs text-slate-400 mt-1">
+                          <User className="w-3.5 h-3.5 text-slate-500" />
+                          <span>Cliente: <strong className="text-slate-200">{job.client?.full_name || 'Lucas Ferreira'}</strong></span>
+                        </div>
+                      </div>
+                      <span className={`px-2.5 py-1 rounded-full text-xs font-bold border shrink-0 ${meta.colorClass}`}>
+                        {meta.badgeLabel}
+                      </span>
+                    </div>
+
+                    {/* Address Box with Copy Button (Prompt Section 15) */}
+                    <div className="text-xs text-slate-300 space-y-2 bg-slate-950 p-3.5 rounded-2xl border border-slate-800">
+                      <div className="flex items-start justify-between gap-2">
+                        <div className="flex items-start gap-2">
+                          <MapPin className="w-4 h-4 text-orange-400 shrink-0 mt-0.5" />
+                          <div>
+                            <span className="font-semibold text-slate-200 block">{job.address}</span>
+                            <span className="text-[11px] text-slate-500 block">Imperatriz - MA</span>
+                          </div>
+                        </div>
+
+                        <button
+                          onClick={() => handleCopyAddress(job.address, job.id)}
+                          className="px-2.5 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white text-[11px] font-semibold border border-slate-700 transition flex items-center gap-1 shrink-0 cursor-pointer"
+                        >
+                          {copiedId === job.id ? (
+                            <>
+                              <Check className="w-3 h-3 text-emerald-400" />
+                              <span className="text-emerald-400">Copiado</span>
+                            </>
+                          ) : (
+                            <>
+                              <Copy className="w-3 h-3" />
+                              <span>Copiar</span>
+                            </>
+                          )}
+                        </button>
+                      </div>
+
+                      <div className="flex items-center gap-1.5 text-slate-400 pt-1 border-t border-slate-900 text-[11px]">
+                        <Clock className="w-3.5 h-3.5" />
+                        <span>Agendado para: {job.scheduled_date || 'Hoje'} às {job.scheduled_start || '10:30'}</span>
+                      </div>
+                    </div>
+
+                    {/* Contextual Action Button according to status (Prompt Section 8) */}
+                    <div className="space-y-2 pt-2 border-t border-slate-800">
+                      <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider block">
+                        Atualizar Etapa do Atendimento:
+                      </span>
+
+                      <div className="flex flex-wrap gap-2">
+                        {nextAction && (
+                          <button
+                            onClick={() => handleAdvanceStatus(job.id, nextAction.nextStatus!)}
+                            className={`flex-1 py-3 px-4 rounded-xl text-xs transition shadow-lg flex items-center justify-center gap-2 cursor-pointer ${nextAction.buttonColorClass}`}
+                          >
+                            {nextAction.iconName === 'Truck' && <Truck className="w-4 h-4" />}
+                            {nextAction.iconName === 'MapPin' && <MapPin className="w-4 h-4" />}
+                            {nextAction.iconName === 'Play' && <Play className="w-4 h-4" />}
+                            {nextAction.iconName === 'CheckCircle2' && <CheckCircle2 className="w-4 h-4" />}
+                            <span>{nextAction.buttonLabel}</span>
+                          </button>
+                        )}
+
+                        <Link
+                          to={`/solicitacoes/${job.id}`}
+                          className="py-3 px-3.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-semibold flex items-center gap-1.5 border border-slate-700 transition"
+                        >
+                          <Clock className="w-4 h-4 text-orange-400" />
+                          <span>Timeline</span>
+                        </Link>
+
+                        <button
+                          onClick={() => navigate('/chat')}
+                          className="py-3 px-3.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-semibold flex items-center gap-1.5 border border-slate-700 transition cursor-pointer"
+                        >
+                          <MessageSquare className="w-4 h-4 text-orange-400" />
+                          <span>Chat</span>
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
 
         {/* Incoming Service Requests in Imperatriz (Opportunity Queue) */}
         <div className="space-y-4">
@@ -276,7 +349,7 @@ export const ProfessionalDashboardPage: React.FC = () => {
               Chamados Disponíveis em Imperatriz ({pendingRequests.length})
             </h2>
             <span className="text-xs text-slate-400">
-              Atualizado em tempo real via Supabase Realtime
+              Notificações em tempo real
             </span>
           </div>
 
@@ -304,11 +377,11 @@ export const ProfessionalDashboardPage: React.FC = () => {
 
                   <div className="pt-2 border-t border-slate-800 text-xs text-slate-400 space-y-1">
                     <div className="flex items-center gap-1.5">
-                      <MapPin className="w-3.5 h-3.5 text-orange-400" />
-                      <span className="truncate">{req.address} (2,3 km)</span>
+                      <MapPin className="w-3.5 h-3.5 text-orange-400 shrink-0" />
+                      <span className="truncate">{req.address}</span>
                     </div>
                     <div className="flex items-center gap-1.5">
-                      <Clock className="w-3.5 h-3.5 text-slate-400" />
+                      <Clock className="w-3.5 h-3.5" />
                       <span>{req.scheduled_date} às {req.scheduled_start}</span>
                     </div>
                   </div>
@@ -319,84 +392,95 @@ export const ProfessionalDashboardPage: React.FC = () => {
                   className="w-full py-2.5 rounded-xl bg-orange-500 hover:bg-orange-600 text-slate-950 font-bold text-xs transition shadow cursor-pointer flex items-center justify-center gap-1.5"
                 >
                   <Send className="w-3.5 h-3.5" />
-                  <span>Enviar Orçamento / Proposta</span>
+                  <span>Enviar Orçamento</span>
                 </button>
               </div>
             ))}
           </div>
         </div>
 
-        {/* Modal: Enviar Orçamento */}
+        {/* Send Quote Modal */}
         {selectedRequestForQuote && (
-          <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
-            <div className="bg-slate-900 border border-slate-700 rounded-3xl p-6 max-w-md w-full text-white shadow-2xl">
-              <h3 className="font-bold text-lg text-slate-100 flex items-center gap-2">
-                <Send className="w-5 h-5 text-orange-400" />
-                Enviar Proposta de Orçamento
-              </h3>
-              <p className="text-xs text-slate-400 mt-1">
-                Para o chamado: <strong className="text-white">{selectedRequestForQuote.title}</strong>
-              </p>
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-sm animate-in fade-in">
+            <div className="bg-slate-900 border border-slate-800 rounded-3xl p-6 max-w-lg w-full shadow-2xl space-y-5">
+              <div className="flex items-center justify-between pb-3 border-b border-slate-800">
+                <h3 className="font-bold text-lg text-white">
+                  Enviar Orçamento de Serviço
+                </h3>
+                <button
+                  onClick={() => setSelectedRequestForQuote(null)}
+                  className="text-slate-400 hover:text-white"
+                >
+                  ✕
+                </button>
+              </div>
 
-              <form onSubmit={handleSendQuote} className="space-y-4 my-5">
+              <div className="bg-slate-950 p-4 rounded-2xl border border-slate-800 space-y-1">
+                <span className="text-xs font-bold text-orange-400">{selectedRequestForQuote.title}</span>
+                <p className="text-xs text-slate-400">{selectedRequestForQuote.description}</p>
+                <div className="text-[11px] text-slate-500 pt-1">
+                  Local: {selectedRequestForQuote.address}
+                </div>
+              </div>
+
+              <form onSubmit={handleSendQuote} className="space-y-4">
                 <div>
-                  <label className="block text-xs font-semibold text-slate-300 mb-1">
-                    Valor total do serviço (R$):
+                  <label className="block text-xs font-bold text-slate-300 mb-1">
+                    Valor da sua Proposta (R$):
                   </label>
                   <input
                     type="number"
-                    required
                     value={quoteAmount}
                     onChange={(e) => setQuoteAmount(e.target.value)}
-                    placeholder="180"
-                    className="w-full bg-slate-950 text-white text-sm p-3 rounded-xl border border-slate-700 focus:outline-none focus:border-orange-500"
+                    required
+                    min="10"
+                    step="5"
+                    className="w-full px-4 py-2.5 rounded-xl bg-slate-950 border border-slate-800 text-white text-sm focus:border-orange-500 focus:outline-none"
+                    placeholder="Ex: 180"
                   />
-                  <span className="text-[11px] text-slate-400 mt-1 block">
-                    Taxa da plataforma: 10% (Você receberá R$ {(parseFloat(quoteAmount || '0') * 0.9).toFixed(2)})
-                  </span>
                 </div>
 
                 <div>
-                  <label className="block text-xs font-semibold text-slate-300 mb-1">
-                    Duração estimada:
+                  <label className="block text-xs font-bold text-slate-300 mb-1">
+                    Tempo Estimado:
                   </label>
                   <input
                     type="text"
-                    required
                     value={quoteDuration}
                     onChange={(e) => setQuoteDuration(e.target.value)}
-                    placeholder="Ex: 1h a 2h"
-                    className="w-full bg-slate-950 text-white text-xs p-3 rounded-xl border border-slate-700 focus:outline-none focus:border-orange-500"
+                    required
+                    className="w-full px-4 py-2.5 rounded-xl bg-slate-950 border border-slate-800 text-white text-sm focus:border-orange-500 focus:outline-none"
+                    placeholder="Ex: 1 a 2 horas"
                   />
                 </div>
 
                 <div>
-                  <label className="block text-xs font-semibold text-slate-300 mb-1">
-                    Detalhes da proposta e peças inclusas:
+                  <label className="block text-xs font-bold text-slate-300 mb-1">
+                    Descrição do que está incluso:
                   </label>
                   <textarea
-                    rows={3}
                     value={quoteDescription}
                     onChange={(e) => setQuoteDescription(e.target.value)}
-                    placeholder="Descreva o que está incluso no seu valor..."
-                    className="w-full bg-slate-950 text-white text-xs p-3 rounded-xl border border-slate-700 focus:outline-none focus:border-orange-500"
+                    rows={3}
+                    className="w-full px-4 py-2.5 rounded-xl bg-slate-950 border border-slate-800 text-white text-sm focus:border-orange-500 focus:outline-none"
+                    placeholder="Ex: Visita técnica, mão de obra completa e garantia de 90 dias."
                   />
                 </div>
 
-                <div className="flex items-center gap-3 pt-2">
+                <div className="grid grid-cols-2 gap-3 pt-2">
                   <button
                     type="button"
                     onClick={() => setSelectedRequestForQuote(null)}
-                    className="flex-1 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-xs font-semibold text-slate-300"
+                    className="py-3 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold text-xs transition cursor-pointer"
                   >
                     Cancelar
                   </button>
                   <button
                     type="submit"
                     disabled={isSendingQuote}
-                    className="flex-1 py-2.5 rounded-xl bg-gradient-to-r from-orange-500 to-amber-500 hover:from-orange-600 text-slate-950 font-bold text-xs shadow-lg shadow-orange-500/25"
+                    className="py-3 rounded-xl bg-orange-500 hover:bg-orange-600 text-slate-950 font-bold text-xs transition shadow-lg shadow-orange-500/20 cursor-pointer"
                   >
-                    {isSendingQuote ? 'Enviando...' : 'Enviar ao Cliente'}
+                    {isSendingQuote ? 'Enviando...' : 'Confirmar e Enviar'}
                   </button>
                 </div>
               </form>

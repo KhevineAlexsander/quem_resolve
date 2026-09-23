@@ -1,6 +1,6 @@
 import React from 'react';
-import { useNavigate } from 'react-router-dom';
-import { X, Bell, Check, Clock, ChevronRight } from 'lucide-react';
+import { useNavigate, Link } from 'react-router-dom';
+import { X, Bell, Check, Clock, ChevronRight, ExternalLink } from 'lucide-react';
 import { useApp } from '../context/AppContext';
 import { notificationService } from '../services/notificationService';
 
@@ -15,7 +15,9 @@ export const NotificationModal: React.FC = () => {
     refreshData();
     closeNotifications();
 
-    if (n.type === 'service_status' || n.type === 'quote_received') {
+    if (n.data?.service_request_id) {
+      navigate(`/solicitacoes/${n.data.service_request_id}`);
+    } else if (n.type === 'service_status' || n.type === 'quote_received') {
       navigate('/cliente');
     } else if (n.type === 'new_message') {
       navigate('/chat');
@@ -27,6 +29,13 @@ export const NotificationModal: React.FC = () => {
     refreshData();
   };
 
+  const handleOpenFullPage = () => {
+    closeNotifications();
+    navigate('/notificacoes');
+  };
+
+  const unreadCount = notifications.filter(n => !n.read_at).length;
+
   return (
     <div className="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm flex items-start sm:items-center justify-center p-3 sm:p-4">
       <div className="bg-slate-900 border border-slate-700/80 rounded-3xl w-full max-w-md text-white shadow-2xl overflow-hidden mt-12 sm:mt-0 animate-in fade-in zoom-in-95 duration-200">
@@ -34,20 +43,24 @@ export const NotificationModal: React.FC = () => {
           <div className="flex items-center gap-2">
             <Bell className="w-4 h-4 text-orange-400" />
             <h3 className="font-bold text-sm text-slate-100">Notificações</h3>
-            <span className="text-[11px] bg-orange-500/20 text-orange-400 font-bold px-2 py-0.5 rounded-full">
-              {notifications.filter(n => !n.read_at).length} novas
-            </span>
+            {unreadCount > 0 && (
+              <span className="text-[11px] bg-orange-500 text-slate-950 font-bold px-2 py-0.5 rounded-full">
+                {unreadCount} novas
+              </span>
+            )}
           </div>
           <div className="flex items-center gap-2">
-            <button
-              onClick={handleMarkAllRead}
-              className="text-[11px] text-slate-400 hover:text-white"
-            >
-              Marcar todas como lidas
-            </button>
+            {unreadCount > 0 && (
+              <button
+                onClick={handleMarkAllRead}
+                className="text-[11px] text-slate-400 hover:text-white cursor-pointer"
+              >
+                Marcar lidas
+              </button>
+            )}
             <button
               onClick={closeNotifications}
-              className="p-1 rounded-lg text-slate-400 hover:text-white"
+              className="p-1 rounded-lg text-slate-400 hover:text-white cursor-pointer"
             >
               <X className="w-4 h-4" />
             </button>
@@ -84,6 +97,16 @@ export const NotificationModal: React.FC = () => {
               </div>
             ))
           )}
+        </div>
+
+        <div className="p-3 bg-slate-950/80 border-t border-slate-800 text-center">
+          <button
+            onClick={handleOpenFullPage}
+            className="text-xs text-orange-400 hover:text-orange-300 font-bold flex items-center justify-center gap-1.5 mx-auto cursor-pointer"
+          >
+            <span>Abrir Central de Notificações Completa</span>
+            <ExternalLink className="w-3.5 h-3.5" />
+          </button>
         </div>
       </div>
     </div>

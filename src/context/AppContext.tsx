@@ -19,6 +19,8 @@ interface AppContextType {
   quotes: Quote[];
   notifications: Notification[];
   unreadNotificationsCount: number;
+  markNotificationRead: (id: string) => void;
+  markAllNotificationsRead: (userId?: string) => void;
   isNotificationsOpen: boolean;
   openNotifications: () => void;
   closeNotifications: () => void;
@@ -91,6 +93,14 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         quotes,
         notifications,
         unreadNotificationsCount,
+        markNotificationRead: (id: string) => {
+          appStore.markNotificationRead(id);
+          refreshData();
+        },
+        markAllNotificationsRead: (userId?: string) => {
+          appStore.markAllNotificationsRead(userId || currentUser.id);
+          refreshData();
+        },
         isNotificationsOpen,
         openNotifications: () => setIsNotificationsOpen(true),
         closeNotifications: () => setIsNotificationsOpen(false),

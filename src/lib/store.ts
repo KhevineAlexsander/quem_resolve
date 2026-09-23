@@ -9,9 +9,10 @@ import {
   Notification, 
   Review, 
   Favorite, 
-  ServiceTracking,
   Payment,
-  UserRole
+  UserRole,
+  ServiceTrackingStatus,
+  ServiceStatusHistory
 } from '../types';
 import { 
   INITIAL_CATEGORIES, 
@@ -24,6 +25,7 @@ import {
   INITIAL_NOTIFICATIONS,
   IMPERATRIZ_CENTER
 } from './initialData';
+import { normalizeStatus, getStatusMeta, canTransitionStatus } from './statusRules';
 
 const STORAGE_KEYS = {
   CURRENT_USER: 'quemresolve_current_user',
@@ -36,8 +38,140 @@ const STORAGE_KEYS = {
   PROFESSIONALS: 'quemresolve_professionals',
   CATEGORIES: 'quemresolve_categories',
   SETTINGS: 'quemresolve_settings',
-  TRACKING: 'quemresolve_tracking',
+  STATUS_HISTORY: 'quemresolve_status_history',
   PAYMENTS: 'quemresolve_payments',
+};
+
+// Initial demo status history for seamless timeline visualization
+const INITIAL_STATUS_HISTORY: Record<string, ServiceStatusHistory[]> = {
+  'req-ar-joao': [
+    {
+      id: 'hist-1',
+      service_request_id: 'req-ar-joao',
+      status: 'REQUESTED',
+      title: 'Solicitação criada',
+      description: 'Solicitação registrada pelo cliente Lucas Ferreira.',
+      created_at: new Date(Date.now() - 3600000 * 3).toISOString(),
+      created_by: 'prof-lucas',
+    },
+    {
+      id: 'hist-2',
+      service_request_id: 'req-ar-joao',
+      status: 'PROFESSIONALS_NOTIFIED',
+      title: 'Profissionais notificados',
+      description: '3 profissionais qualificados em Imperatriz foram notificados.',
+      created_at: new Date(Date.now() - 3600000 * 2.5).toISOString(),
+    },
+    {
+      id: 'hist-3',
+      service_request_id: 'req-ar-joao',
+      status: 'QUOTE_RECEIVED',
+      title: 'Novo orçamento recebido',
+      description: 'João Silva enviou orçamento no valor de R$ 180,00.',
+      created_at: new Date(Date.now() - 3600000 * 2).toISOString(),
+      created_by: 'prof-joao',
+    },
+    {
+      id: 'hist-4',
+      service_request_id: 'req-ar-joao',
+      status: 'PROFESSIONAL_SELECTED',
+      title: 'Profissional selecionado',
+      description: 'Lucas escolheu João Silva para realizar o serviço.',
+      created_at: new Date(Date.now() - 3600000 * 1.5).toISOString(),
+      created_by: 'prof-lucas',
+    },
+    {
+      id: 'hist-5',
+      service_request_id: 'req-ar-joao',
+      status: 'SCHEDULED',
+      title: 'Serviço agendado',
+      description: 'Atendimento confirmado para hoje às 10:30.',
+      created_at: new Date(Date.now() - 3600000 * 1).toISOString(),
+    },
+    {
+      id: 'hist-6',
+      service_request_id: 'req-ar-joao',
+      status: 'ON_THE_WAY',
+      title: 'Profissional a caminho',
+      description: 'João Silva informou que está a caminho do seu endereço.',
+      created_at: new Date(Date.now() - 60000 * 25).toISOString(),
+      created_by: 'prof-joao',
+    },
+  ],
+  'req-hist-1': [
+    {
+      id: 'hist-h1',
+      service_request_id: 'req-hist-1',
+      status: 'REQUESTED',
+      title: 'Solicitação criada',
+      description: 'Solicitação registrada.',
+      created_at: new Date(Date.now() - 86400000 * 4).toISOString(),
+    },
+    {
+      id: 'hist-h2',
+      service_request_id: 'req-hist-1',
+      status: 'PROFESSIONALS_NOTIFIED',
+      title: 'Profissionais notificados',
+      description: 'Profissionais notificados.',
+      created_at: new Date(Date.now() - 86400000 * 4 + 3600000).toISOString(),
+    },
+    {
+      id: 'hist-h3',
+      service_request_id: 'req-hist-1',
+      status: 'QUOTE_RECEIVED',
+      title: 'Novo orçamento recebido',
+      description: 'Orçamento recebido.',
+      created_at: new Date(Date.now() - 86400000 * 4 + 7200000).toISOString(),
+    },
+    {
+      id: 'hist-h4',
+      service_request_id: 'req-hist-1',
+      status: 'PROFESSIONAL_SELECTED',
+      title: 'Profissional selecionado',
+      description: 'Profissional selecionado.',
+      created_at: new Date(Date.now() - 86400000 * 3.5).toISOString(),
+    },
+    {
+      id: 'hist-h5',
+      service_request_id: 'req-hist-1',
+      status: 'SCHEDULED',
+      title: 'Serviço agendado',
+      description: 'Agendamento confirmado.',
+      created_at: new Date(Date.now() - 86400000 * 3.5 + 3600000).toISOString(),
+    },
+    {
+      id: 'hist-h6',
+      service_request_id: 'req-hist-1',
+      status: 'ON_THE_WAY',
+      title: 'Profissional a caminho',
+      description: 'Profissional a caminho.',
+      created_at: new Date(Date.now() - 86400000 * 3).toISOString(),
+    },
+    {
+      id: 'hist-h7',
+      service_request_id: 'req-hist-1',
+      status: 'ARRIVED',
+      title: 'Profissional chegou ao local',
+      description: 'Chegou ao local.',
+      created_at: new Date(Date.now() - 86400000 * 3 + 1800000).toISOString(),
+    },
+    {
+      id: 'hist-h8',
+      service_request_id: 'req-hist-1',
+      status: 'IN_PROGRESS',
+      title: 'Serviço em andamento',
+      description: 'Serviço iniciado.',
+      created_at: new Date(Date.now() - 86400000 * 3 + 2400000).toISOString(),
+    },
+    {
+      id: 'hist-h9',
+      service_request_id: 'req-hist-1',
+      status: 'COMPLETED',
+      title: 'Serviço concluído',
+      description: 'Atendimento finalizado com sucesso.',
+      created_at: new Date(Date.now() - 86400000 * 3 + 7200000).toISOString(),
+    },
+  ],
 };
 
 class AppStore {
@@ -49,7 +183,6 @@ class AppStore {
 
   private initData() {
     const savedUser = localStorage.getItem(STORAGE_KEYS.CURRENT_USER);
-    // If not set, or old placeholder, initialize as Master Admin Khevine Oliveira
     if (!savedUser || (savedUser && !savedUser.includes('khevineoliveira@gmail.com') && !savedUser.includes('ADMIN'))) {
       localStorage.setItem(STORAGE_KEYS.CURRENT_USER, JSON.stringify(INITIAL_PROFILES[0])); // Khevine Oliveira (ADMIN)
     }
@@ -74,6 +207,9 @@ class AppStore {
     if (!localStorage.getItem(STORAGE_KEYS.SETTINGS)) {
       localStorage.setItem(STORAGE_KEYS.SETTINGS, JSON.stringify({ platform_fee_percentage: 10, city: 'Imperatriz - MA' }));
     }
+    if (!localStorage.getItem(STORAGE_KEYS.STATUS_HISTORY)) {
+      localStorage.setItem(STORAGE_KEYS.STATUS_HISTORY, JSON.stringify(INITIAL_STATUS_HISTORY));
+    }
     if (!localStorage.getItem(STORAGE_KEYS.REVIEWS)) {
       localStorage.setItem(STORAGE_KEYS.REVIEWS, JSON.stringify([
         {
@@ -90,18 +226,6 @@ class AppStore {
     }
     if (!localStorage.getItem(STORAGE_KEYS.FAVORITES)) {
       localStorage.setItem(STORAGE_KEYS.FAVORITES, JSON.stringify(['pro-joao']));
-    }
-    if (!localStorage.getItem(STORAGE_KEYS.TRACKING)) {
-      localStorage.setItem(STORAGE_KEYS.TRACKING, JSON.stringify({
-        'req-ar-joao': {
-          service_request_id: 'req-ar-joao',
-          professional_id: 'pro-joao',
-          latitude: -5.5255,
-          longitude: -47.4775,
-          eta_minutes: 12,
-          recorded_at: new Date().toISOString(),
-        }
-      }));
     }
     if (!localStorage.getItem(STORAGE_KEYS.PAYMENTS)) {
       localStorage.setItem(STORAGE_KEYS.PAYMENTS, JSON.stringify([]));
@@ -148,49 +272,69 @@ class AppStore {
     }
   }
 
+  public getProfiles(): Profile[] {
+    return INITIAL_PROFILES;
+  }
+
+  public getProfileById(id: string): Profile | undefined {
+    return INITIAL_PROFILES.find(p => p.id === id || p.user_id === id);
+  }
+
+  public updateProfile(updated: Partial<Profile>) {
+    const current = this.getCurrentUser();
+    const merged = { ...current, ...updated, updated_at: new Date().toISOString() };
+    this.setCurrentUser(merged);
+  }
+
   // --- Categories ---
   public getCategories(): Category[] {
     const raw = localStorage.getItem(STORAGE_KEYS.CATEGORIES);
     return raw ? JSON.parse(raw) : INITIAL_CATEGORIES;
   }
 
+  public getCategoryBySlug(slug: string): Category | undefined {
+    return this.getCategories().find(c => c.slug === slug);
+  }
+
+  public getCategoryById(id: string): Category | undefined {
+    return this.getCategories().find(c => c.id === id);
+  }
+
   public addCategory(cat: Omit<Category, 'id'>): Category {
-    const categories = this.getCategories();
+    const list = this.getCategories();
     const newCat: Category = {
       ...cat,
       id: 'cat-' + Date.now(),
-      is_active: cat.is_active ?? true,
     };
-    categories.push(newCat);
-    localStorage.setItem(STORAGE_KEYS.CATEGORIES, JSON.stringify(categories));
+    list.push(newCat);
+    localStorage.setItem(STORAGE_KEYS.CATEGORIES, JSON.stringify(list));
     this.notify();
     return newCat;
   }
 
-  public toggleCategoryActive(categoryId: string): void {
-    const categories = this.getCategories();
-    const index = categories.findIndex(c => c.id === categoryId);
-    if (index !== -1) {
-      categories[index].is_active = !categories[index].is_active;
-      localStorage.setItem(STORAGE_KEYS.CATEGORIES, JSON.stringify(categories));
-      this.notify();
-    }
+  public deleteCategory(id: string) {
+    const list = this.getCategories().filter(c => c.id !== id);
+    localStorage.setItem(STORAGE_KEYS.CATEGORIES, JSON.stringify(list));
+    this.notify();
   }
 
-  public deleteCategory(categoryId: string): void {
-    const categories = this.getCategories().filter(c => c.id !== categoryId);
-    localStorage.setItem(STORAGE_KEYS.CATEGORIES, JSON.stringify(categories));
-    this.notify();
+  public toggleCategoryActive(id: string) {
+    const list = this.getCategories();
+    const target = list.find(c => c.id === id);
+    if (target) {
+      target.is_active = !target.is_active;
+      localStorage.setItem(STORAGE_KEYS.CATEGORIES, JSON.stringify(list));
+      this.notify();
+    }
   }
 
   // --- Professionals ---
   public getProfessionals(): Professional[] {
     const raw = localStorage.getItem(STORAGE_KEYS.PROFESSIONALS);
-    const pros: Professional[] = raw ? JSON.parse(raw) : INITIAL_PROFESSIONALS;
-    // Enrich with profiles
-    return pros.map(p => {
-      const profile = INITIAL_PROFILES.find(pr => pr.id === p.profile_id);
-      return { ...p, profile };
+    const list: Professional[] = raw ? JSON.parse(raw) : INITIAL_PROFESSIONALS;
+    return list.map(pro => {
+      const profile = INITIAL_PROFILES.find(p => p.id === pro.profile_id);
+      return { ...pro, profile };
     });
   }
 
@@ -213,18 +357,81 @@ class AppStore {
     return INITIAL_COMPANIES;
   }
 
+  // --- Status History ---
+  public getStatusHistory(requestId: string): ServiceStatusHistory[] {
+    const raw = localStorage.getItem(STORAGE_KEYS.STATUS_HISTORY);
+    if (!raw) return [];
+    try {
+      const map: Record<string, ServiceStatusHistory[]> = JSON.parse(raw);
+      return map[requestId] || [];
+    } catch {
+      return [];
+    }
+  }
+
+  public addStatusHistory(
+    requestId: string,
+    status: ServiceTrackingStatus,
+    title: string,
+    description: string,
+    createdBy?: string
+  ): ServiceStatusHistory {
+    const raw = localStorage.getItem(STORAGE_KEYS.STATUS_HISTORY);
+    const map: Record<string, ServiceStatusHistory[]> = raw ? JSON.parse(raw) : {};
+    
+    if (!map[requestId]) {
+      map[requestId] = [];
+    }
+
+    const newEntry: ServiceStatusHistory = {
+      id: 'hist-' + Date.now() + '-' + Math.random().toString(36).substring(2, 6),
+      service_request_id: requestId,
+      status,
+      title,
+      description,
+      created_at: new Date().toISOString(),
+      created_by: createdBy,
+    };
+
+    map[requestId].push(newEntry);
+    localStorage.setItem(STORAGE_KEYS.STATUS_HISTORY, JSON.stringify(map));
+    return newEntry;
+  }
+
   // --- Service Requests ---
   public getRequests(): ServiceRequest[] {
     const raw = localStorage.getItem(STORAGE_KEYS.REQUESTS);
     const list: ServiceRequest[] = raw ? JSON.parse(raw) : INITIAL_REQUESTS;
     const categories = this.getCategories();
     const quotes = this.getQuotes();
+    const pros = this.getProfessionals();
 
     return list.map(req => {
       const category = categories.find(c => c.id === req.category_id);
       const reqQuotes = quotes.filter(q => q.service_request_id === req.id);
       const client = INITIAL_PROFILES.find(p => p.id === req.client_id) || INITIAL_PROFILES[0];
-      return { ...req, category, quotes: reqQuotes, client };
+      const history = this.getStatusHistory(req.id);
+      
+      let selectedPro = req.selected_professional_id 
+        ? pros.find(p => p.id === req.selected_professional_id)
+        : undefined;
+
+      // Se houver quote aceito e não estiver explicitado, seleciona o pro correspondente
+      if (!selectedPro && reqQuotes.length > 0) {
+        const acceptedQuote = reqQuotes.find(q => q.status === 'accepted');
+        if (acceptedQuote) {
+          selectedPro = pros.find(p => p.id === acceptedQuote.professional_id);
+        }
+      }
+
+      return { 
+        ...req, 
+        category, 
+        quotes: reqQuotes, 
+        client, 
+        status_history: history,
+        selected_professional: selectedPro 
+      };
     });
   }
 
@@ -234,56 +441,134 @@ class AppStore {
 
   public createRequest(data: Omit<ServiceRequest, 'id' | 'created_at' | 'updated_at'>): ServiceRequest {
     const requests = this.getRequests();
+    const newReqId = 'req-' + Date.now();
+    
+    // Constrói campos de endereço estruturados
+    const address = data.address || `${data.street || 'Rua'}, ${data.number || 'S/N'} - ${data.neighborhood || 'Centro'}, ${data.city || 'Imperatriz'} - ${data.state || 'MA'}`;
+
     const newReq: ServiceRequest = {
       ...data,
-      id: 'req-' + Date.now(),
+      id: newReqId,
+      address,
+      status: 'REQUESTED',
+      scheduled_date: data.scheduled_date || new Date().toISOString().split('T')[0],
+      scheduled_start: data.scheduled_start || '09:00',
       created_at: new Date().toISOString(),
       updated_at: new Date().toISOString(),
     };
+
     requests.unshift(newReq);
     localStorage.setItem(STORAGE_KEYS.REQUESTS, JSON.stringify(requests));
     
-    // Add auto-notification
+    // Registra histórico inicial
+    this.addStatusHistory(
+      newReqId,
+      'REQUESTED',
+      'Solicitação criada',
+      `Solicitação "${newReq.title}" registrada com sucesso.`,
+      newReq.client_id
+    );
+
+    // Registra notificação dos profissionais
+    setTimeout(() => {
+      this.addStatusHistory(
+        newReqId,
+        'PROFESSIONALS_NOTIFIED',
+        'Profissionais notificados',
+        'Profissionais qualificados da região de Imperatriz foram notificados.',
+      );
+      this.notify();
+    }, 1200);
+
+    // Auto-notificação para o cliente
     this.addNotification({
       user_id: newReq.client_id,
-      title: 'Solicitação criada com sucesso!',
-      message: `Buscando profissionais em ${IMPERATRIZ_CENTER.name} para "${newReq.title}".`,
+      title: '📋 Solicitação criada com sucesso!',
+      message: `Buscando profissionais em Imperatriz - MA para "${newReq.title}".`,
       type: 'request_created',
+      data: { service_request_id: newReqId, status: 'REQUESTED' }
     });
 
     this.notify();
     return newReq;
   }
 
-  public updateRequestStatus(id: string, status: ServiceRequest['status']) {
+  public updateRequestStatus(
+    id: string, 
+    newStatus: ServiceTrackingStatus | string, 
+    proName?: string,
+    customDescription?: string
+  ): { success: boolean; error?: string } {
     const requests = this.getRequests();
     const index = requests.findIndex(r => r.id === id);
-    if (index !== -1) {
-      requests[index].status = status;
-      requests[index].updated_at = new Date().toISOString();
-      localStorage.setItem(STORAGE_KEYS.REQUESTS, JSON.stringify(requests));
+    if (index === -1) return { success: false, error: 'Solicitação não encontrada.' };
 
-      // Trigger automatic notification based on status
-      const req = requests[index];
-      const statusTitles: Record<string, string> = {
-        accepted: 'Orçamento aceito! Serviço confirmado.',
-        professional_on_way: 'O profissional está a caminho!',
-        in_progress: 'O serviço foi iniciado.',
-        completed: 'Serviço concluído! Avalie seu profissional.',
-        cancelled: 'Serviço cancelado.',
-      };
+    const req = requests[index];
+    const currentNorm = normalizeStatus(req.status);
+    const targetNorm = normalizeStatus(newStatus);
 
-      if (statusTitles[status]) {
-        this.addNotification({
-          user_id: req.client_id,
-          title: statusTitles[status],
-          message: `Atualização de status para: ${req.title}`,
-          type: `status_${status}`,
-        });
-      }
-
-      this.notify();
+    // Validação rígida de transição
+    const validation = canTransitionStatus(currentNorm, targetNorm, true);
+    if (!validation.allowed) {
+      return { success: false, error: validation.reason };
     }
+
+    req.status = targetNorm;
+    req.updated_at = new Date().toISOString();
+    localStorage.setItem(STORAGE_KEYS.REQUESTS, JSON.stringify(requests));
+
+    // Metadados do status
+    const meta = getStatusMeta(targetNorm);
+    const resolvedProName = proName || req.selected_professional?.profile?.full_name || 'Profissional';
+    
+    // Descrição dinâmica para histórico
+    let historyDesc = customDescription;
+    if (!historyDesc) {
+      switch (targetNorm) {
+        case 'ON_THE_WAY':
+          historyDesc = `${resolvedProName} informou que está a caminho do local.`;
+          break;
+        case 'ARRIVED':
+          historyDesc = `${resolvedProName} chegou ao endereço do cliente.`;
+          break;
+        case 'IN_PROGRESS':
+          historyDesc = `${resolvedProName} iniciou a execução do serviço.`;
+          break;
+        case 'COMPLETED':
+          historyDesc = `Serviço concluído com sucesso por ${resolvedProName}.`;
+          break;
+        case 'SCHEDULED':
+          historyDesc = `Atendimento confirmado para ${req.scheduled_date || 'hoje'} às ${req.scheduled_start || '10:00'}.`;
+          break;
+        default:
+          historyDesc = meta.clientDescription;
+      }
+    }
+
+    // Registra entrada no histórico
+    this.addStatusHistory(
+      id,
+      targetNorm,
+      meta.title,
+      historyDesc,
+      this.getCurrentUser().id
+    );
+
+    // Cria notificação rica em tempo real para o cliente
+    this.addNotification({
+      user_id: req.client_id,
+      title: meta.notificationTitle,
+      message: meta.notificationMessage(resolvedProName),
+      type: `status_${targetNorm.toLowerCase()}`,
+      data: {
+        service_request_id: id,
+        status: targetNorm,
+        url: `/solicitacoes/${id}`,
+      }
+    });
+
+    this.notify();
+    return { success: true };
   }
 
   // --- Quotes ---
@@ -307,17 +592,19 @@ class AppStore {
     quotes.push(newQuote);
     localStorage.setItem(STORAGE_KEYS.QUOTES, JSON.stringify(quotes));
 
-    // Update request status to quotes_received
-    this.updateRequestStatus(data.service_request_id, 'quotes_received');
+    // Update request status to QUOTE_RECEIVED
+    this.updateRequestStatus(data.service_request_id, 'QUOTE_RECEIVED');
 
     // Notify client
     const req = this.getRequestById(data.service_request_id);
+    const pro = this.getProfessionalById(data.professional_id);
     if (req) {
       this.addNotification({
         user_id: req.client_id,
-        title: 'Novo orçamento recebido!',
-        message: `Você recebeu uma proposta no valor de R$ ${data.amount.toFixed(2)}`,
+        title: '💰 Novo orçamento recebido!',
+        message: `${pro?.profile?.full_name || 'Um profissional'} enviou uma proposta no valor de R$ ${data.amount.toFixed(2)}`,
         type: 'new_quote',
+        data: { service_request_id: data.service_request_id }
       });
     }
 
@@ -327,38 +614,58 @@ class AppStore {
 
   public acceptQuote(quoteId: string, requestId: string) {
     const quotes = this.getQuotes();
+    let chosenProId = '';
     quotes.forEach(q => {
       if (q.service_request_id === requestId) {
-        q.status = q.id === quoteId ? 'accepted' : 'rejected';
+        if (q.id === quoteId) {
+          q.status = 'accepted';
+          chosenProId = q.professional_id;
+        } else {
+          q.status = 'rejected';
+        }
       }
     });
     localStorage.setItem(STORAGE_KEYS.QUOTES, JSON.stringify(quotes));
-    this.updateRequestStatus(requestId, 'accepted');
+
+    // Atualiza solicitação com o profissional escolhido e avança status
+    const requests = this.getRequests();
+    const reqIndex = requests.findIndex(r => r.id === requestId);
+    if (reqIndex !== -1) {
+      requests[reqIndex].selected_professional_id = chosenProId;
+      requests[reqIndex].status = 'PROFESSIONAL_SELECTED';
+      requests[reqIndex].updated_at = new Date().toISOString();
+      localStorage.setItem(STORAGE_KEYS.REQUESTS, JSON.stringify(requests));
+    }
+
+    const pro = this.getProfessionalById(chosenProId);
+    this.addStatusHistory(
+      requestId,
+      'PROFESSIONAL_SELECTED',
+      'Profissional selecionado',
+      `O cliente escolheu ${pro?.profile?.full_name || 'o profissional'} para o serviço.`,
+      this.getCurrentUser().id
+    );
+
+    // Auto avança para SCHEDULED se tiver data definida
+    this.addStatusHistory(
+      requestId,
+      'SCHEDULED',
+      'Serviço agendado',
+      'Atendimento confirmado na agenda.',
+    );
+
+    this.addNotification({
+      user_id: pro?.profile_id || '',
+      title: '🎉 Orçamento Aprovado!',
+      message: `Você foi escolhido para o atendimento em Imperatriz - MA!`,
+      type: 'quote_accepted',
+      data: { service_request_id: requestId }
+    });
+
     this.notify();
   }
 
-  // --- Tracking ---
-  public getTracking(requestId: string): ServiceTracking | undefined {
-    const raw = localStorage.getItem(STORAGE_KEYS.TRACKING);
-    if (!raw) return undefined;
-    const map = JSON.parse(raw);
-    return map[requestId];
-  }
-
-  public updateTracking(requestId: string, data: Partial<ServiceTracking>) {
-    const raw = localStorage.getItem(STORAGE_KEYS.TRACKING);
-    const map = raw ? JSON.parse(raw) : {};
-    map[requestId] = {
-      ...map[requestId],
-      ...data,
-      service_request_id: requestId,
-      recorded_at: new Date().toISOString(),
-    };
-    localStorage.setItem(STORAGE_KEYS.TRACKING, JSON.stringify(map));
-    this.notify();
-  }
-
-  // --- Messages & Chat ---
+  // --- Messages / Chat ---
   public getMessages(conversationId?: string): Message[] {
     const raw = localStorage.getItem(STORAGE_KEYS.MESSAGES);
     const list: Message[] = raw ? JSON.parse(raw) : INITIAL_MESSAGES;
@@ -368,131 +675,86 @@ class AppStore {
     return list;
   }
 
-  public sendMessage(conversationId: string, senderId: string, message: string): Message {
-    const list = this.getMessages();
+  public getMessagesByConversation(conversationId: string): Message[] {
+    return this.getMessages(conversationId);
+  }
+
+  public sendMessage(conversationId: string, senderId: string, text: string): Message {
+    const messages = this.getMessages();
     const newMsg: Message = {
       id: 'msg-' + Date.now(),
       conversation_id: conversationId,
       sender_id: senderId,
-      message,
+      message: text,
       message_type: 'text',
-      read_at: undefined,
       created_at: new Date().toISOString(),
     };
-    list.push(newMsg);
-    localStorage.setItem(STORAGE_KEYS.MESSAGES, JSON.stringify(list));
+    messages.push(newMsg);
+    localStorage.setItem(STORAGE_KEYS.MESSAGES, JSON.stringify(messages));
     this.notify();
     return newMsg;
   }
 
   public markMessagesRead(conversationId: string, currentUserId: string) {
-    const list = this.getMessages();
-    let updated = false;
-    list.forEach(m => {
-      if (m.conversation_id === conversationId && m.sender_id !== currentUserId && !m.read_at) {
+    const messages = this.getMessages();
+    messages.forEach(m => {
+      if (m.conversation_id === conversationId && m.sender_id !== currentUserId) {
         m.read_at = new Date().toISOString();
-        updated = true;
       }
     });
-    if (updated) {
-      localStorage.setItem(STORAGE_KEYS.MESSAGES, JSON.stringify(list));
-      this.notify();
-    }
-  }
-
-  // --- Notifications ---
-  public getNotifications(userId?: string): Notification[] {
-    const raw = localStorage.getItem(STORAGE_KEYS.NOTIFICATIONS);
-    const list: Notification[] = raw ? JSON.parse(raw) : INITIAL_NOTIFICATIONS;
-    if (userId) {
-      return list.filter(n => n.user_id === userId);
-    }
-    return list;
-  }
-
-  public addNotification(data: Omit<Notification, 'id' | 'created_at'>) {
-    const list = this.getNotifications();
-    const notif: Notification = {
-      ...data,
-      id: 'notif-' + Date.now(),
-      created_at: new Date().toISOString(),
-    };
-    list.unshift(notif);
-    localStorage.setItem(STORAGE_KEYS.NOTIFICATIONS, JSON.stringify(list));
+    localStorage.setItem(STORAGE_KEYS.MESSAGES, JSON.stringify(messages));
     this.notify();
   }
 
-  public markNotificationRead(id: string) {
-    const list = this.getNotifications();
-    const item = list.find(n => n.id === id);
-    if (item) {
-      item.read_at = new Date().toISOString();
-      localStorage.setItem(STORAGE_KEYS.NOTIFICATIONS, JSON.stringify(list));
-      this.notify();
-    }
-  }
-
-  // --- Reviews ---
-  public getReviews(proId?: string): Review[] {
-    const raw = localStorage.getItem(STORAGE_KEYS.REVIEWS);
-    const list: Review[] = raw ? JSON.parse(raw) : [];
-    if (proId) {
-      return list.filter(r => r.professional_id === proId);
-    }
-    return list;
-  }
-
-  public createReview(data: Omit<Review, 'id' | 'created_at'>): Review {
-    const list = this.getReviews();
-    const newRev: Review = {
-      ...data,
-      id: 'rev-' + Date.now(),
-      created_at: new Date().toISOString(),
-    };
-    list.unshift(newRev);
-    localStorage.setItem(STORAGE_KEYS.REVIEWS, JSON.stringify(list));
-
-    // Recalculate rating on professional
-    const pros = this.getProfessionals();
-    const pro = pros.find(p => p.id === data.professional_id);
-    if (pro) {
-      const proReviews = list.filter(r => r.professional_id === data.professional_id);
-      const avg = proReviews.reduce((sum, r) => sum + r.rating, 0) / proReviews.length;
-      pro.rating = Number(avg.toFixed(1));
-      pro.total_reviews = proReviews.length;
-      localStorage.setItem(STORAGE_KEYS.PROFESSIONALS, JSON.stringify(pros));
-    }
-
-    this.notify();
-    return newRev;
-  }
-
-  // --- Favorites ---
-  public getFavorites(): string[] {
-    const raw = localStorage.getItem(STORAGE_KEYS.FAVORITES);
+  // --- Payments & Settings ---
+  public getPayments(): any[] {
+    const raw = localStorage.getItem(STORAGE_KEYS.PAYMENTS);
     return raw ? JSON.parse(raw) : [];
   }
 
-  public toggleFavorite(proId: string): boolean {
-    let favs = this.getFavorites();
-    const isFav = favs.includes(proId);
-    if (isFav) {
-      favs = favs.filter(id => id !== proId);
+  public processPayment(
+    requestIdOrData: any,
+    amount?: number,
+    proId?: string,
+    clientId?: string
+  ): any {
+    const list = this.getPayments();
+    let newPay: any;
+
+    if (typeof requestIdOrData === 'object' && requestIdOrData !== null) {
+      newPay = {
+        ...requestIdOrData,
+        id: 'pay-' + Date.now(),
+        status: 'paid',
+        created_at: new Date().toISOString(),
+      };
     } else {
-      favs.push(proId);
+      const fee = ((amount || 0) * this.getPlatformFeePercentage()) / 100;
+      newPay = {
+        id: 'pay-' + Date.now(),
+        service_request_id: requestIdOrData,
+        amount: amount || 0,
+        platform_fee: fee,
+        professional_amount: (amount || 0) - fee,
+        professional_id: proId || '',
+        client_id: clientId || '',
+        status: 'paid',
+        payment_method: 'PIX',
+        created_at: new Date().toISOString(),
+      };
     }
-    localStorage.setItem(STORAGE_KEYS.FAVORITES, JSON.stringify(favs));
+
+    list.unshift(newPay);
+    localStorage.setItem(STORAGE_KEYS.PAYMENTS, JSON.stringify(list));
     this.notify();
-    return !isFav;
+    return newPay;
   }
 
-  // --- Platform Settings ---
   public getPlatformFeePercentage(): number {
     const raw = localStorage.getItem(STORAGE_KEYS.SETTINGS);
     if (!raw) return 10;
     try {
-      const settings = JSON.parse(raw);
-      return settings.platform_fee_percentage ?? 10;
+      return JSON.parse(raw).platform_fee_percentage || 10;
     } catch {
       return 10;
     }
@@ -500,42 +762,77 @@ class AppStore {
 
   public setPlatformFeePercentage(fee: number) {
     const raw = localStorage.getItem(STORAGE_KEYS.SETTINGS);
-    const settings = raw ? JSON.parse(raw) : {};
-    settings.platform_fee_percentage = fee;
-    localStorage.setItem(STORAGE_KEYS.SETTINGS, JSON.stringify(settings));
+    const curr = raw ? JSON.parse(raw) : {};
+    curr.platform_fee_percentage = fee;
+    localStorage.setItem(STORAGE_KEYS.SETTINGS, JSON.stringify(curr));
     this.notify();
   }
 
-  // --- Payments ---
-  public getPayments(): Payment[] {
-    const raw = localStorage.getItem(STORAGE_KEYS.PAYMENTS);
-    return raw ? JSON.parse(raw) : [];
+  // --- Notifications ---
+  public getNotifications(userId?: string): Notification[] {
+    const raw = localStorage.getItem(STORAGE_KEYS.NOTIFICATIONS);
+    const list: Notification[] = raw ? JSON.parse(raw) : INITIAL_NOTIFICATIONS;
+    if (userId) {
+      return list.filter(n => n.user_id === userId || n.user_id === 'all');
+    }
+    return list;
   }
 
-  public processPayment(requestId: string, amount: number, proId: string, clientId: string): Payment {
-    const feePercentage = this.getPlatformFeePercentage();
-    const platformFee = Number(((amount * feePercentage) / 100).toFixed(2));
-    const proAmount = Number((amount - platformFee).toFixed(2));
-
-    const payments = this.getPayments();
-    const payment: Payment = {
-      id: 'pay-' + Date.now(),
-      service_request_id: requestId,
-      client_id: clientId,
-      professional_id: proId,
-      amount,
-      platform_fee: platformFee,
-      professional_amount: proAmount,
-      status: 'paid',
-      payment_method: 'PIX Instantâneo',
+  public addNotification(notification: Omit<Notification, 'id' | 'created_at'>): Notification {
+    const notifications = this.getNotifications();
+    const newNotif: Notification = {
+      ...notification,
+      id: 'notif-' + Date.now() + '-' + Math.random().toString(36).substring(2, 6),
       created_at: new Date().toISOString(),
     };
-    payments.unshift(payment);
-    localStorage.setItem(STORAGE_KEYS.PAYMENTS, JSON.stringify(payments));
-
-    this.updateRequestStatus(requestId, 'completed');
+    notifications.unshift(newNotif);
+    localStorage.setItem(STORAGE_KEYS.NOTIFICATIONS, JSON.stringify(notifications));
     this.notify();
-    return payment;
+    return newNotif;
+  }
+
+  public markNotificationRead(id: string) {
+    const notifications = this.getNotifications();
+    const notif = notifications.find(n => n.id === id);
+    if (notif && !notif.read_at) {
+      notif.read_at = new Date().toISOString();
+      localStorage.setItem(STORAGE_KEYS.NOTIFICATIONS, JSON.stringify(notifications));
+      this.notify();
+    }
+  }
+
+  public markAllNotificationsRead(userId?: string) {
+    const notifications = this.getNotifications();
+    notifications.forEach(n => {
+      if (!userId || n.user_id === userId || n.user_id === 'all') {
+        n.read_at = new Date().toISOString();
+      }
+    });
+    localStorage.setItem(STORAGE_KEYS.NOTIFICATIONS, JSON.stringify(notifications));
+    this.notify();
+  }
+
+  // --- Reviews ---
+  public getReviews(professionalId?: string): Review[] {
+    const raw = localStorage.getItem(STORAGE_KEYS.REVIEWS);
+    const list: Review[] = raw ? JSON.parse(raw) : [];
+    if (professionalId) {
+      return list.filter(r => r.professional_id === professionalId);
+    }
+    return list;
+  }
+
+  public createReview(data: Omit<Review, 'id' | 'created_at'>): Review {
+    const reviews = this.getReviews();
+    const newRev: Review = {
+      ...data,
+      id: 'rev-' + Date.now(),
+      created_at: new Date().toISOString(),
+    };
+    reviews.unshift(newRev);
+    localStorage.setItem(STORAGE_KEYS.REVIEWS, JSON.stringify(reviews));
+    this.notify();
+    return newRev;
   }
 }
 

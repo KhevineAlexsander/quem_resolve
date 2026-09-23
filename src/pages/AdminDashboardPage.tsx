@@ -19,18 +19,20 @@ import {
   UserCheck,
   Mail,
   Phone,
-  Layers
+  Layers,
+  Database
 } from 'lucide-react';
 import { useApp } from '../context/AppContext';
 import { paymentService } from '../services/paymentService';
 import { appStore } from '../lib/store';
 import { INITIAL_PROFILES } from '../lib/initialData';
+import { DatabaseHealthChecker } from '../components/DatabaseHealthChecker';
 
 export const AdminDashboardPage: React.FC = () => {
   const { professionals, categories, requests, currentUser, refreshData } = useApp();
   const [feePercentage, setFeePercentage] = useState(paymentService.getFeePercentage());
   const [savedFee, setSavedFee] = useState(false);
-  const [activeTab, setActiveTab] = useState<'audit' | 'categories' | 'users' | 'finance'>('audit');
+  const [activeTab, setActiveTab] = useState<'audit' | 'categories' | 'users' | 'finance' | 'database'>('audit');
 
   // Category modal state
   const [newCatName, setNewCatName] = useState('');
@@ -160,6 +162,18 @@ export const AdminDashboardPage: React.FC = () => {
 
           <div className="flex items-center gap-3 flex-wrap">
             <button
+              onClick={() => setActiveTab('database')}
+              className={`px-4 py-2.5 rounded-xl text-xs font-semibold flex items-center gap-2 border transition ${
+                activeTab === 'database'
+                  ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40'
+                  : 'bg-slate-800 hover:bg-slate-700 text-slate-300 border-slate-700'
+              }`}
+              title="Verificar integridade do banco de dados e Supabase"
+            >
+              <Database className="w-4 h-4 text-emerald-400" />
+              <span>Status do Banco</span>
+            </button>
+            <button
               onClick={handleResetData}
               className="px-4 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-semibold flex items-center gap-2 border border-slate-700 transition"
               title="Restaura os dados iniciais do zero"
@@ -263,6 +277,17 @@ export const AdminDashboardPage: React.FC = () => {
           >
             <Sliders className="w-4 h-4" />
             <span>Taxas & Finanças</span>
+          </button>
+          <button
+            onClick={() => setActiveTab('database')}
+            className={`px-4 py-2.5 rounded-xl text-xs font-bold transition flex items-center gap-2 ${
+              activeTab === 'database'
+                ? 'bg-orange-500 text-slate-950 shadow-md shadow-orange-500/20'
+                : 'bg-slate-900 text-slate-400 hover:text-white hover:bg-slate-800'
+            }`}
+          >
+            <Database className="w-4 h-4" />
+            <span>Banco de Dados & Supabase</span>
           </button>
         </div>
 
@@ -551,6 +576,11 @@ export const AdminDashboardPage: React.FC = () => {
               </div>
             </div>
           </div>
+        )}
+
+        {/* Tab 5: Database Health Checker & Supabase Tools */}
+        {activeTab === 'database' && (
+          <DatabaseHealthChecker />
         )}
 
         {/* Modal Add Category */}

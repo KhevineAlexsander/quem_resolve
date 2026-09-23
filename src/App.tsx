@@ -14,6 +14,8 @@ import { CompanyDashboardPage } from './pages/CompanyDashboardPage';
 import { AdminDashboardPage } from './pages/AdminDashboardPage';
 import { ChatPage } from './pages/ChatPage';
 import { ProfessionalProfilePage } from './pages/ProfessionalProfilePage';
+import { ServiceTrackingPage } from './pages/ServiceTrackingPage';
+import { NotificationsPage } from './pages/NotificationsPage';
 import { MapPin, ShieldCheck, Heart } from 'lucide-react';
 
 const AppContent: React.FC = () => {
@@ -34,6 +36,10 @@ const AppContent: React.FC = () => {
           <Route path="/cliente" element={<ClientDashboardPage />} />
           <Route path="/profissional" element={<ProfessionalDashboardPage />} />
           <Route path="/profissional/:id" element={<ProfessionalProfilePage />} />
+          <Route path="/solicitacoes/:id" element={<ServiceTrackingPage />} />
+          <Route path="/app/solicitacoes/:id" element={<ServiceTrackingPage />} />
+          <Route path="/notificacoes" element={<NotificationsPage />} />
+          <Route path="/app/notificacoes" element={<NotificationsPage />} />
           <Route path="/empresa" element={<CompanyDashboardPage />} />
           <Route path="/admin" element={<AdminDashboardPage />} />
           <Route path="/chat" element={<ChatPage />} />
@@ -59,91 +65,63 @@ const AppContent: React.FC = () => {
                 <div className="w-8 h-8 rounded-xl bg-orange-500 flex items-center justify-center font-black text-slate-950">
                   QR
                 </div>
-                <span className="font-display font-bold text-lg text-white">
-                  Quem<span className="text-orange-500">Resolve</span>
+                <span className="font-display font-extrabold text-lg text-white">
+                  Quem Resolve
                 </span>
               </div>
               <p className="text-slate-400 text-xs leading-relaxed">
-                Você pede. Quem resolve, aparece. Plataforma líder em contratação de serviços residenciais, comerciais e manutenção em Imperatriz - MA.
+                Plataforma de serviços em Imperatriz - MA. Conectando clientes aos melhores técnicos com linha do tempo e acompanhamento em tempo real.
               </p>
-              <div className="flex items-center gap-2 text-orange-400 text-xs font-semibold">
-                <MapPin className="w-4 h-4" />
-                <span>Imperatriz - Maranhão • Brasil</span>
+              <div className="flex items-center gap-2 text-slate-500 text-[11px]">
+                <MapPin className="w-3.5 h-3.5 text-orange-400" />
+                <span>Imperatriz - Maranhão, Brasil</span>
               </div>
             </div>
 
-            {/* Quick Links */}
+            {/* Quick links */}
             <div>
-              <h4 className="font-bold text-slate-200 uppercase tracking-wider text-[11px] mb-3">
+              <h4 className="font-bold text-white text-xs uppercase tracking-wider mb-3">
                 Para Clientes
               </h4>
-              <ul className="space-y-2">
-                <li>
-                  <button onClick={() => openRequestModal()} className="hover:text-orange-400 transition text-left">
-                    Solicitar um Profissional
-                  </button>
-                </li>
-                <li>
-                  <Link to="/cliente" className="hover:text-orange-400 transition">
-                    Meus Pedidos & Rastreamento
-                  </Link>
-                </li>
-                <li>
-                  <Link to="/" className="hover:text-orange-400 transition">
-                    Mapa de Prestadores
-                  </Link>
-                </li>
+              <ul className="space-y-2 text-slate-400">
+                <li><Link to="/cliente" className="hover:text-orange-400 transition">Meus Pedidos</Link></li>
+                <li><Link to="/notificacoes" className="hover:text-orange-400 transition">Notificações</Link></li>
+                <li><button onClick={() => openRequestModal()} className="hover:text-orange-400 transition text-left">Solicitar Orçamento</button></li>
+                <li><Link to="/chat" className="hover:text-orange-400 transition">Chat com Técnicos</Link></li>
               </ul>
             </div>
 
-            {/* Pros & Companies */}
+            {/* Professionals & Companies */}
             <div>
-              <h4 className="font-bold text-slate-200 uppercase tracking-wider text-[11px] mb-3">
-                Para Parceiros
+              <h4 className="font-bold text-white text-xs uppercase tracking-wider mb-3">
+                Para Profissionais
               </h4>
-              <ul className="space-y-2">
-                <li>
-                  <Link to="/profissional" className="hover:text-orange-400 transition">
-                    Área do Profissional
-                  </Link>
-                </li>
-                <li>
-                  <Link to="/empresa" className="hover:text-orange-400 transition">
-                    Área da Empresa (Frotas e PMOC)
-                  </Link>
-                </li>
-                <li>
-                  <button onClick={openAuthModal} className="hover:text-orange-400 transition text-left">
-                    Cadastre-se como Prestador
-                  </button>
-                </li>
+              <ul className="space-y-2 text-slate-400">
+                <li><Link to="/profissional" className="hover:text-orange-400 transition">Painel do Profissional</Link></li>
+                <li><Link to="/empresa" className="hover:text-orange-400 transition">Painel Empresarial</Link></li>
+                <li><Link to="/admin" className="hover:text-orange-400 transition">Painel Administrativo</Link></li>
               </ul>
             </div>
 
-            {/* Security & Guarantees */}
-            <div>
-              <h4 className="font-bold text-slate-200 uppercase tracking-wider text-[11px] mb-3">
-                Segurança e Suporte
+            {/* Trust and safety */}
+            <div className="space-y-3">
+              <h4 className="font-bold text-white text-xs uppercase tracking-wider">
+                Garantia e Segurança
               </h4>
-              <div className="p-3 bg-slate-900 rounded-2xl border border-slate-800 space-y-2">
-                <div className="flex items-center gap-2 text-emerald-400 font-bold">
-                  <ShieldCheck className="w-4 h-4" />
-                  <span>Garantia de 90 Dias</span>
-                </div>
-                <p className="text-[11px] text-slate-400 leading-relaxed">
-                  Todos os serviços contratados pelo Quem Resolve contam com seguro e mediação técnica.
-                </p>
-                <div className="text-[11px] text-slate-300 font-semibold pt-1">
-                  SAC Imperatriz: (99) 3524-0000
-                </div>
+              <p className="text-slate-400 text-xs">
+                Todos os profissionais passam por verificação cadastral. Pagamentos intermediados com segurança.
+              </p>
+              <div className="flex items-center gap-2 text-emerald-400 text-xs font-semibold bg-emerald-500/10 p-2.5 rounded-xl border border-emerald-500/20">
+                <ShieldCheck className="w-4 h-4" />
+                <span>100% Protegido</span>
               </div>
             </div>
           </div>
 
-          <div className="pt-6 border-t border-slate-900/80 flex flex-col sm:flex-row items-center justify-between text-[11px] text-slate-500 gap-3">
-            <p>© {new Date().getFullYear()} Quem Resolve Tecnologia Ltda. Todos os direitos reservados.</p>
+          <div className="pt-6 border-t border-slate-900 flex flex-col sm:flex-row items-center justify-between gap-4 text-[11px] text-slate-500">
+            <p>© {new Date().getFullYear()} Quem Resolve - Imperatriz/MA. Todos os direitos reservados.</p>
             <p className="flex items-center gap-1">
-              Desenvolvido com dedicação para a população de Imperatriz - MA
+              Feito com dedicação para a região Tocantina
             </p>
           </div>
         </div>
@@ -152,7 +130,7 @@ const AppContent: React.FC = () => {
   );
 };
 
-export default function App() {
+export const App: React.FC = () => {
   return (
     <BrowserRouter>
       <AppProvider>
@@ -160,4 +138,6 @@ export default function App() {
       </AppProvider>
     </BrowserRouter>
   );
-}
+};
+
+export default App;

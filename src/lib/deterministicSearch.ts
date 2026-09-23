@@ -6,7 +6,7 @@
  */
 
 import { Professional, Category } from '../types';
-import { calculateDistanceKm } from './googleMaps';
+import { calculateDistanceKm } from './geoUtils';
 
 export interface KeywordRule {
   categorySlug: string;
@@ -248,6 +248,7 @@ export function normalizeText(rawText: string): string {
 
 export interface ClassificationResult {
   categorySlug: string;
+  categoryName?: string;
   serviceTitle: string;
   matchedKeywords: string[];
   score: number;
@@ -282,6 +283,7 @@ export function classifyServiceProblem(userQuery: string): ClassificationResult 
       highestScore = score;
       bestMatch = {
         categorySlug: rule.categorySlug,
+        categoryName: rule.serviceTitle,
         serviceTitle: rule.serviceTitle,
         matchedKeywords,
         score,
@@ -306,6 +308,7 @@ export interface RankedProfessional {
   distanceKm: number;
   isWithinRadius: boolean;
   score: number;
+  matchReason?: string;
 }
 
 /**

@@ -10,14 +10,13 @@ import {
   Upload, 
   AlertTriangle, 
   Check, 
-  ArrowRight,
+  ArrowRight, 
   ArrowLeft,
-  Crosshair
+  Building,
+  Home
 } from 'lucide-react';
 import { useApp } from '../context/AppContext';
 import { serviceRequestService } from '../services/serviceRequestService';
-import { IMPERATRIZ_CENTER } from '../lib/initialData';
-import { geocodeAddress } from '../lib/googleMaps';
 import { classifyServiceProblem, ClassificationResult } from '../lib/deterministicSearch';
 
 export const RequestServiceModal: React.FC = () => {
@@ -36,9 +35,16 @@ export const RequestServiceModal: React.FC = () => {
   const [description, setDescription] = useState('');
   const [selectedCategorySlug, setSelectedCategorySlug] = useState('climatizacao');
   const [urgency, setUrgency] = useState<'normal' | 'urgent'>('normal');
-  const [address, setAddress] = useState('Rua Ceará, 450 - Juçara, Imperatriz - MA');
-  const [latitude, setLatitude] = useState(IMPERATRIZ_CENTER.lat);
-  const [longitude, setLongitude] = useState(IMPERATRIZ_CENTER.lng);
+
+  // Structured address fields (Prompt Section 1 & 15)
+  const [street, setStreet] = useState('Rua Ceará');
+  const [number, setNumber] = useState('450');
+  const [complement, setComplement] = useState('');
+  const [neighborhood, setNeighborhood] = useState('Juçara');
+  const [city, setCity] = useState('Imperatriz');
+  const [state, setState] = useState('MA');
+  const [cep, setCep] = useState('65900-000');
+
   const [scheduledDate, setScheduledDate] = useState(new Date().toISOString().split('T')[0]);
   const [scheduledStart, setScheduledStart] = useState('14:00');
   const [imageUrl, setImageUrl] = useState('');
@@ -58,7 +64,7 @@ export const RequestServiceModal: React.FC = () => {
 
   if (!isRequestModalOpen) return null;
 
-  // Classificação determinística por palavras-chave cadastradas (100% sem IA)
+  // Classificação determinística por palavras-chave
   const runKeywordClassification = (text: string) => {
     const result = classifyServiceProblem(text);
     if (result) {
@@ -69,35 +75,33 @@ export const RequestServiceModal: React.FC = () => {
     }
   };
 
-  const handleUseLocation = () => {
-    if (navigator.geolocation) {
-      navigator.geolocation.getCurrentPosition(
-        (pos) => {
-          setLatitude(pos.coords.latitude);
-          setLongitude(pos.coords.longitude);
-          setAddress('Localização aproximada via GPS, Imperatriz - MA');
-        },
-        () => {
-          setAddress('Centro, Imperatriz - MA');
-        }
-      );
-    }
+  const getFullFormattedAddress = () => {
+    let base = `${street.trim()}, ${number.trim()}`;
+    if (complement.trim()) base += ` (${complement.trim()})`;
+    base += ` - ${neighborhood.trim()}, ${city.trim()} - ${state.trim()}`;
+    if (cep.trim()) base += ` - CEP: ${cep.trim()}`;
+    return base;
   };
 
   const handleSubmit = async () => {
     setIsSubmitting(true);
     try {
       const cat = categories.find(c => c.slug === selectedCategorySlug) || categories[0];
-      const coords = await geocodeAddress(address);
+      const formattedAddress = getFullFormattedAddress();
 
       const created = await serviceRequestService.create({
         client_id: currentUser.id,
         category_id: cat.id,
         title: title || `Serviço de ${cat.name}`,
         description: description || title,
-        address: coords.placeName || address,
-        latitude: coords.latitude,
-        longitude: coords.longitude,
+        address: formattedAddress,
+        street,
+        number,
+        complement,
+        neighborhood,
+        city,
+        state,
+        cep,
         urgency,
         scheduled_date: scheduledDate,
         scheduled_start: scheduledStart,
@@ -106,7 +110,7 @@ export const RequestServiceModal: React.FC = () => {
 
       refreshData();
       closeRequestModal();
-      navigate(`/cliente`);
+      navigate(`/solicitacoes/${created.id}`);
     } finally {
       setIsSubmitting(false);
     }
@@ -130,7 +134,7 @@ export const RequestServiceModal: React.FC = () => {
               <h2 className="font-display font-bold text-base text-slate-100">
                 {step === 1 && 'O que você precisa resolver hoje?'}
                 {step === 2 && 'Escolha a Categoria & Urgência'}
-                {step === 3 && 'Onde e Quando?'}
+                {step === 3 && 'Endereço & Agendamento'}
                 {step === 4 && 'Fotos & Revisão'}
               </h2>
               <p className="text-[11px] text-slate-400">
@@ -139,86 +143,69 @@ export const RequestServiceModal: React.FC = () => {
             </div>
           </div>
 
-          <button
+          <button 
             onClick={closeRequestModal}
-            className="p-2 rounded-xl text-slate-400 hover:text-white hover:bg-slate-800 transition"
+            className="w-8 h-8 rounded-full bg-slate-800 text-slate-400 hover:text-white flex items-center justify-center transition cursor-pointer"
           >
-            <X className="w-5 h-5" />
+            <X className="w-4 h-4" />
           </button>
         </div>
 
-        {/* Step Body */}
-        <div className="p-6">
-          {/* STEP 1: Problem Description */}
+        {/* Step Progress Bar */}
+        <div className="h-1 w-full bg-slate-800">
+          <div 
+            className="h-full bg-orange-500 transition-all duration-300"
+            style={{ width: `${(step / 4) * 100}%` }}
+          />
+        </div>
+
+        {/* Modal Body */}
+        <div className="p-6 space-y-4 max-h-[70vh] overflow-y-auto">
+          {/* STEP 1: Description & Title */}
           {step === 1 && (
             <div className="space-y-4">
               <div>
                 <label className="block text-xs font-semibold text-slate-300 mb-1.5">
-                  Descreva o problema com suas palavras:
+                  Título ou Resumo do Serviço:
                 </label>
-                <textarea
-                  rows={3}
-                  value={description}
+                <input
+                  type="text"
+                  value={title}
                   onChange={(e) => {
-                    setDescription(e.target.value);
-                    setTitle(e.target.value.slice(0, 50));
+                    setTitle(e.target.value);
                     runKeywordClassification(e.target.value);
                   }}
-                  placeholder="Ex: Meu ar-condicionado parou de gelar e está fazendo um barulho estranho..."
-                  className="w-full bg-slate-950 text-white text-sm p-3.5 rounded-2xl border border-slate-700 focus:outline-none focus:border-orange-500 transition placeholder:text-slate-500"
+                  placeholder="Ex: Instalação de ar split 12000 BTUs no quarto"
+                  className="w-full bg-slate-950 text-white text-xs px-4 py-3 rounded-2xl border border-slate-700 focus:outline-none focus:border-orange-500 transition shadow-inner"
                 />
               </div>
 
-              {/* Quick suggestions chips */}
               <div>
-                <span className="text-[11px] text-slate-400 block mb-2">Sugestões rápidas:</span>
-                <div className="flex flex-wrap gap-2">
-                  {[
-                    'Instalação de ar-condicionado Split',
-                    'Vazamento de água na cozinha',
-                    'Troca de disjuntor e fiação',
-                    'Limpeza pesada pós-obra',
-                    'Montagem de guarda-roupa',
-                  ].map((sug, i) => (
-                    <button
-                      key={i}
-                      type="button"
-                      onClick={() => {
-                        setDescription(sug);
-                        setTitle(sug);
-                        runKeywordClassification(sug);
-                      }}
-                      className="text-xs bg-slate-800 hover:bg-slate-700 text-slate-300 px-3 py-1.5 rounded-xl border border-slate-700/60 transition"
-                    >
-                      {sug}
-                    </button>
-                  ))}
-                </div>
+                <label className="block text-xs font-semibold text-slate-300 mb-1.5">
+                  Descreva o problema com mais detalhes:
+                </label>
+                <textarea
+                  value={description}
+                  onChange={(e) => setDescription(e.target.value)}
+                  rows={4}
+                  placeholder="Ex: O aparelho está pingando água para dentro do quarto e não está gelando direito..."
+                  className="w-full bg-slate-950 text-white text-xs p-4 rounded-2xl border border-slate-700 focus:outline-none focus:border-orange-500 transition shadow-inner"
+                />
               </div>
 
-              {/* Categorização determinística por palavras-chave (100% sem IA) */}
               {keywordMatch && (
-                <div className="p-4 bg-orange-500/10 border border-orange-500/30 rounded-2xl text-xs space-y-1.5 animate-in fade-in">
-                  <div className="flex items-center gap-1.5 text-orange-400 font-bold">
-                    <Check className="w-4 h-4 text-emerald-400" />
-                    <span>Categoria compatível identificada:</span>
+                <div className="p-3 bg-orange-500/10 border border-orange-500/30 rounded-2xl flex items-center gap-3">
+                  <div className="p-2 rounded-xl bg-orange-500/20 text-orange-400">
+                    <Sparkles className="w-4 h-4" />
                   </div>
-                  <p className="text-slate-300">
-                    Categoria: <strong className="text-white capitalize">{keywordMatch.categorySlug}</strong>
-                  </p>
-                  <p className="text-slate-300">
-                    Serviço correspondente: <strong className="text-white">{keywordMatch.serviceTitle}</strong>
-                  </p>
-                  {keywordMatch.matchedKeywords.length > 0 && (
-                    <div className="flex items-center gap-1 text-[11px] text-slate-400 pt-1 flex-wrap">
-                      <span>Termos encontrados:</span>
-                      {keywordMatch.matchedKeywords.map((kw, idx) => (
-                        <span key={idx} className="bg-slate-800 text-orange-300 px-1.5 py-0.5 rounded text-[10px]">
-                          {kw}
-                        </span>
-                      ))}
-                    </div>
-                  )}
+                  <div className="text-xs">
+                    <span className="font-bold text-orange-400 block">
+                      Reconhecimento de Serviço
+                    </span>
+                    <span className="text-slate-300">
+                      Detectamos: <strong>{keywordMatch.categoryName}</strong>.
+                    </span>
+                  </div>
                 </div>
               )}
             </div>
@@ -226,18 +213,18 @@ export const RequestServiceModal: React.FC = () => {
 
           {/* STEP 2: Category & Urgency */}
           {step === 2 && (
-            <div className="space-y-4">
+            <div className="space-y-5">
               <div>
                 <label className="block text-xs font-semibold text-slate-300 mb-2">
                   Selecione a categoria:
                 </label>
-                <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5 max-h-56 overflow-y-auto pr-1">
+                <div className="grid grid-cols-2 gap-2.5">
                   {categories.map((cat) => (
                     <button
                       key={cat.id}
                       type="button"
                       onClick={() => setSelectedCategorySlug(cat.slug)}
-                      className={`p-3 rounded-2xl text-left border transition flex flex-col justify-between ${
+                      className={`p-3 rounded-2xl text-left border transition flex flex-col justify-between cursor-pointer ${
                         selectedCategorySlug === cat.slug
                           ? 'bg-orange-500/20 border-orange-500 text-white'
                           : 'bg-slate-950 border-slate-800 text-slate-300 hover:border-slate-700'
@@ -261,7 +248,7 @@ export const RequestServiceModal: React.FC = () => {
                   <button
                     type="button"
                     onClick={() => setUrgency('normal')}
-                    className={`p-3 rounded-2xl border text-left transition ${
+                    className={`p-3 rounded-2xl border text-left transition cursor-pointer ${
                       urgency === 'normal'
                         ? 'bg-slate-800 border-orange-500 text-white'
                         : 'bg-slate-950 border-slate-800 text-slate-400'
@@ -274,7 +261,7 @@ export const RequestServiceModal: React.FC = () => {
                   <button
                     type="button"
                     onClick={() => setUrgency('urgent')}
-                    className={`p-3 rounded-2xl border text-left transition ${
+                    className={`p-3 rounded-2xl border text-left transition cursor-pointer ${
                       urgency === 'urgent'
                         ? 'bg-amber-500/20 border-amber-500 text-amber-400 font-bold'
                         : 'bg-slate-950 border-slate-800 text-slate-400'
@@ -291,54 +278,121 @@ export const RequestServiceModal: React.FC = () => {
             </div>
           )}
 
-          {/* STEP 3: Location & Time */}
+          {/* STEP 3: Structured Address & Schedule (No GPS) */}
           {step === 3 && (
             <div className="space-y-4">
-              <div>
-                <label className="block text-xs font-semibold text-slate-300 mb-1.5">
-                  Endereço do atendimento em Imperatriz - MA:
-                </label>
-                <div className="relative">
+              <div className="flex items-center justify-between pb-1 border-b border-slate-800">
+                <span className="text-xs font-bold text-orange-400 uppercase tracking-wider flex items-center gap-1.5">
+                  <Home className="w-3.5 h-3.5" />
+                  <span>Endereço para Atendimento</span>
+                </span>
+                <span className="text-[10px] text-slate-400">
+                  Imperatriz - MA
+                </span>
+              </div>
+
+              <div className="grid grid-cols-3 gap-3">
+                <div className="col-span-2">
+                  <label className="block text-[11px] font-semibold text-slate-300 mb-1">
+                    Rua / Avenida:
+                  </label>
                   <input
                     type="text"
-                    value={address}
-                    onChange={(e) => setAddress(e.target.value)}
-                    placeholder="Rua, número e bairro..."
-                    className="w-full bg-slate-950 text-white text-xs pl-9 pr-28 py-3 rounded-2xl border border-slate-700 focus:outline-none focus:border-orange-500 transition"
+                    value={street}
+                    onChange={(e) => setStreet(e.target.value)}
+                    placeholder="Ex: Rua Ceará"
+                    className="w-full bg-slate-950 text-white text-xs px-3 py-2.5 rounded-xl border border-slate-700 focus:outline-none focus:border-orange-500 transition"
                   />
-                  <MapPin className="w-4 h-4 text-orange-500 absolute left-3 top-3.5" />
-                  <button
-                    type="button"
-                    onClick={handleUseLocation}
-                    className="absolute right-1.5 top-1.5 px-2.5 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-[11px] font-medium text-slate-200 flex items-center gap-1 transition"
-                  >
-                    <Crosshair className="w-3 h-3 text-orange-400" />
-                    <span>Usar GPS</span>
-                  </button>
                 </div>
-                <p className="text-[10px] text-slate-400 mt-1">
-                  Atendemos toda a cidade de Imperatriz (Juçara, Centro, Bacuri, Nova Imperatriz, etc.)
-                </p>
+
+                <div>
+                  <label className="block text-[11px] font-semibold text-slate-300 mb-1">
+                    Número:
+                  </label>
+                  <input
+                    type="text"
+                    value={number}
+                    onChange={(e) => setNumber(e.target.value)}
+                    placeholder="Ex: 450"
+                    className="w-full bg-slate-950 text-white text-xs px-3 py-2.5 rounded-xl border border-slate-700 focus:outline-none focus:border-orange-500 transition"
+                  />
+                </div>
               </div>
 
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-xs font-semibold text-slate-300 mb-1.5">
-                    Data preferida:
+                  <label className="block text-[11px] font-semibold text-slate-300 mb-1">
+                    Bairro:
+                  </label>
+                  <input
+                    type="text"
+                    value={neighborhood}
+                    onChange={(e) => setNeighborhood(e.target.value)}
+                    placeholder="Ex: Juçara, Centro, Bacuri"
+                    className="w-full bg-slate-950 text-white text-xs px-3 py-2.5 rounded-xl border border-slate-700 focus:outline-none focus:border-orange-500 transition"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-[11px] font-semibold text-slate-300 mb-1">
+                    Complemento / Apto:
+                  </label>
+                  <input
+                    type="text"
+                    value={complement}
+                    onChange={(e) => setComplement(e.target.value)}
+                    placeholder="Ex: Apto 201, Bloco B"
+                    className="w-full bg-slate-950 text-white text-xs px-3 py-2.5 rounded-xl border border-slate-700 focus:outline-none focus:border-orange-500 transition"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-3 gap-3">
+                <div className="col-span-2">
+                  <label className="block text-[11px] font-semibold text-slate-300 mb-1">
+                    Cidade / Estado:
+                  </label>
+                  <input
+                    type="text"
+                    value={`${city} - ${state}`}
+                    disabled
+                    className="w-full bg-slate-950/60 text-slate-400 text-xs px-3 py-2.5 rounded-xl border border-slate-800 cursor-not-allowed"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-[11px] font-semibold text-slate-300 mb-1">
+                    CEP:
+                  </label>
+                  <input
+                    type="text"
+                    value={cep}
+                    onChange={(e) => setCep(e.target.value)}
+                    placeholder="65900-000"
+                    className="w-full bg-slate-950 text-white text-xs px-3 py-2.5 rounded-xl border border-slate-700 focus:outline-none focus:border-orange-500 transition"
+                  />
+                </div>
+              </div>
+
+              {/* Scheduled Date and Time */}
+              <div className="grid grid-cols-2 gap-3 pt-2">
+                <div>
+                  <label className="block text-[11px] font-semibold text-slate-300 mb-1">
+                    Data do atendimento:
                   </label>
                   <div className="relative">
                     <input
                       type="date"
                       value={scheduledDate}
                       onChange={(e) => setScheduledDate(e.target.value)}
-                      className="w-full bg-slate-950 text-white text-xs pl-8 pr-3 py-2.5 rounded-2xl border border-slate-700 focus:outline-none focus:border-orange-500 transition"
+                      className="w-full bg-slate-950 text-white text-xs pl-8 pr-3 py-2.5 rounded-xl border border-slate-700 focus:outline-none focus:border-orange-500 transition"
                     />
                     <Calendar className="w-3.5 h-3.5 text-slate-400 absolute left-3 top-3" />
                   </div>
                 </div>
 
                 <div>
-                  <label className="block text-xs font-semibold text-slate-300 mb-1.5">
+                  <label className="block text-[11px] font-semibold text-slate-300 mb-1">
                     Horário aproximado:
                   </label>
                   <div className="relative">
@@ -346,7 +400,7 @@ export const RequestServiceModal: React.FC = () => {
                       type="time"
                       value={scheduledStart}
                       onChange={(e) => setScheduledStart(e.target.value)}
-                      className="w-full bg-slate-950 text-white text-xs pl-8 pr-3 py-2.5 rounded-2xl border border-slate-700 focus:outline-none focus:border-orange-500 transition"
+                      className="w-full bg-slate-950 text-white text-xs pl-8 pr-3 py-2.5 rounded-xl border border-slate-700 focus:outline-none focus:border-orange-500 transition"
                     />
                     <Clock className="w-3.5 h-3.5 text-slate-400 absolute left-3 top-3" />
                   </div>
@@ -379,60 +433,51 @@ export const RequestServiceModal: React.FC = () => {
                       </button>
                     </div>
                   ) : (
-                    <div
-                      onClick={() =>
-                        setImageUrl(
-                          'https://images.unsplash.com/photo-1621905251189-08b45d6a269e?w=600&auto=format&fit=crop&q=80'
-                        )
-                      }
-                      className="space-y-1"
+                    <div 
+                      onClick={() => setImageUrl('https://images.unsplash.com/photo-1581092160607-ee22621dd758?w=600&auto=format&fit=crop&q=80')}
+                      className="space-y-2 py-2"
                     >
-                      <Camera className="w-8 h-8 text-orange-400 mx-auto" />
-                      <div className="text-xs font-semibold text-slate-200">
-                        Clique para adicionar foto do problema
-                      </div>
-                      <div className="text-[10px] text-slate-400">
-                        Armazenado com segurança no Supabase Storage
-                      </div>
+                      <Camera className="w-8 h-8 text-slate-400 mx-auto" />
+                      <p className="text-xs text-slate-400">
+                        Clique para anexar ou simular foto do local
+                      </p>
                     </div>
                   )}
                 </div>
               </div>
 
-              {/* Summary Card */}
-              <div className="p-4 bg-slate-950 rounded-2xl border border-slate-800 space-y-2 text-xs">
-                <div className="flex justify-between">
-                  <span className="text-slate-400">Categoria:</span>
-                  <span className="font-bold text-white">{selectedCategory?.name}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-slate-400">Urgência:</span>
-                  <span className={`font-bold ${urgency === 'urgent' ? 'text-amber-400' : 'text-emerald-400'}`}>
-                    {urgency === 'urgent' ? 'Urgente' : 'Normal'}
-                  </span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-slate-400">Endereço:</span>
-                  <span className="font-medium text-slate-200 truncate max-w-[200px]">{address}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-slate-400">Data/Horário:</span>
-                  <span className="font-medium text-slate-200">{scheduledDate} às {scheduledStart}</span>
+              {/* Review summary */}
+              <div className="bg-slate-950 p-4 rounded-2xl border border-slate-800 space-y-2 text-xs">
+                <span className="font-bold text-slate-300 block text-[11px] uppercase tracking-wider">
+                  Resumo da sua solicitação:
+                </span>
+                <div className="space-y-1">
+                  <div className="text-white font-bold">{title || 'Manutenção geral'}</div>
+                  <div className="text-slate-400">{description || 'Sem detalhes adicionais'}</div>
+                  <div className="text-orange-400 pt-1 font-medium">
+                    Categoria: {selectedCategory?.name} • Prioridade {urgency === 'urgent' ? '⚡ Urgente' : 'Normal'}
+                  </div>
+                  <div className="text-slate-400 pt-1">
+                    Endereço: {getFullFormattedAddress()}
+                  </div>
+                  <div className="text-slate-400">
+                    Data: {scheduledDate} às {scheduledStart}
+                  </div>
                 </div>
               </div>
             </div>
           )}
         </div>
 
-        {/* Footer Navigation Buttons */}
-        <div className="px-6 py-4 bg-slate-950/80 border-t border-slate-800 flex items-center justify-between">
+        {/* Modal Footer Controls */}
+        <div className="px-6 py-4 border-t border-slate-800 bg-slate-950 flex items-center justify-between">
           {step > 1 ? (
             <button
               type="button"
               onClick={() => setStep(step - 1)}
-              className="flex items-center gap-1 px-4 py-2.5 rounded-xl text-xs font-semibold text-slate-300 hover:text-white hover:bg-slate-800 transition"
+              className="px-4 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-xs font-semibold text-slate-300 flex items-center gap-1 transition cursor-pointer"
             >
-              <ArrowLeft className="w-4 h-4" />
+              <ArrowLeft className="w-3.5 h-3.5" />
               <span>Voltar</span>
             </button>
           ) : (
@@ -442,25 +487,28 @@ export const RequestServiceModal: React.FC = () => {
           {step < 4 ? (
             <button
               type="button"
-              onClick={() => {
-                if (step === 1 && !description.trim()) return;
-                setStep(step + 1);
-              }}
-              disabled={step === 1 && !description.trim()}
-              className="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-orange-500 hover:bg-orange-600 disabled:opacity-50 text-slate-950 font-bold text-xs transition shadow-lg shadow-orange-500/25 cursor-pointer"
+              onClick={() => setStep(step + 1)}
+              disabled={step === 1 && !title.trim()}
+              className="px-5 py-2.5 rounded-xl bg-orange-500 hover:bg-orange-600 disabled:opacity-50 text-slate-950 font-bold text-xs flex items-center gap-1.5 transition shadow-lg shadow-orange-500/20 cursor-pointer"
             >
               <span>Continuar</span>
-              <ArrowRight className="w-4 h-4" />
+              <ArrowRight className="w-3.5 h-3.5" />
             </button>
           ) : (
             <button
               type="button"
               onClick={handleSubmit}
               disabled={isSubmitting}
-              className="flex items-center gap-2 px-6 py-2.5 rounded-xl bg-gradient-to-r from-orange-500 to-amber-500 hover:from-orange-600 hover:to-amber-600 text-slate-950 font-extrabold text-xs shadow-xl shadow-orange-500/30 transition cursor-pointer"
+              className="px-6 py-2.5 rounded-xl bg-gradient-to-r from-orange-500 to-amber-500 hover:from-orange-600 text-slate-950 font-bold text-xs flex items-center gap-2 transition shadow-lg shadow-orange-500/25 cursor-pointer"
             >
-              <Check className="w-4 h-4 stroke-[3]" />
-              <span>{isSubmitting ? 'Enviando...' : 'Solicitar Profissionais'}</span>
+              {isSubmitting ? (
+                <span>Publicando...</span>
+              ) : (
+                <>
+                  <Check className="w-4 h-4 stroke-[3]" />
+                  <span>Publicar e Iniciar Linha do Tempo</span>
+                </>
+              )}
             </button>
           )}
         </div>
