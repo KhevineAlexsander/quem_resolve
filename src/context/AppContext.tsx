@@ -1,5 +1,7 @@
 import React, { createContext, useContext, useEffect, useState } from 'react';
 import { appStore } from '../lib/store';
+import { supabaseSyncService } from '../services/supabaseSyncService';
+import { isSupabaseConfigured } from '../lib/supabase';
 import { 
   Profile, 
   Professional, 
@@ -62,7 +64,22 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     const unsubscribe = appStore.subscribe(() => {
       refreshData();
     });
-    return () => unsubscribe();
+
+    let cleanupRealtime = () => {};
+
+    if (isSupabaseConfigured()) {
+      supabaseSyncService.pullAllFromSupabase().then(() => {
+        refreshData();
+      });
+      cleanupRealtime = supabaseSyncService.setupRealtime(() => {
+        refreshData();
+      });
+    }
+
+    return () => {
+      unsubscribe();
+      cleanupRealtime();
+    };
   }, []);
 
   const switchRole = (role: UserRole) => {

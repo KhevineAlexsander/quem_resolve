@@ -18,6 +18,8 @@ import {
   Terminal,
   Zap,
   UploadCloud,
+  DownloadCloud,
+  Globe,
   CheckCircle,
   Save,
   Trash2,
@@ -286,6 +288,9 @@ export const DatabaseHealthChecker: React.FC = () => {
   const [syncReport, setSyncReport] = useState<SyncReport | null>(null);
   const [testingWrite, setTestingWrite] = useState(false);
   const [testWriteResult, setTestWriteResult] = useState<{ success: boolean; message: string; durationMs: number } | null>(null);
+  const [pullingAll, setPullingAll] = useState(false);
+  const [pullResultMsg, setPullResultMsg] = useState<{ success: boolean; text: string } | null>(null);
+  const [showVercelGuide, setShowVercelGuide] = useState(false);
 
   const checkDatabase = async () => {
     setLoading(true);
@@ -311,7 +316,9 @@ export const DatabaseHealthChecker: React.FC = () => {
 
     const res = saveSupabaseCredentials(inputUrl, inputKey);
     if (res.success) {
-      setSaveSuccessMsg('Credenciais salvas com sucesso! Reconectando ao Supabase...');
+      setSaveSuccessMsg('Credenciais salvas com sucesso! Conectando ao Supabase e sincronizando dados...');
+      supabaseSyncService.pullAllFromSupabase().catch(() => {});
+      supabaseSyncService.setupRealtime();
       setTimeout(() => {
         setSaveSuccessMsg('');
         checkDatabase();
@@ -331,6 +338,29 @@ export const DatabaseHealthChecker: React.FC = () => {
         setSaveSuccessMsg('');
         checkDatabase();
       }, 1500);
+    }
+  };
+
+  const handlePullAllData = async () => {
+    setPullingAll(true);
+    setPullResultMsg(null);
+    try {
+      const res = await supabaseSyncService.pullAllFromSupabase();
+      if (res.success) {
+        const total = Object.values(res.loadedCounts || {}).reduce((a, b) => a + b, 0);
+        setPullResultMsg({
+          success: true,
+          text: `Sincronização concluída! ${total} registros recuperados do Supabase com sucesso.`,
+        });
+        await checkDatabase();
+      } else {
+        setPullResultMsg({
+          success: false,
+          text: `Falha ao carregar dados: ${res.error || 'Verifique as credenciais e o SQL Editor.'}`,
+        });
+      }
+    } finally {
+      setPullingAll(false);
     }
   };
 
@@ -490,10 +520,18 @@ export const DatabaseHealthChecker: React.FC = () => {
               <button
                 onClick={handleTestWrite}
                 disabled={testingWrite}
-                className="px-3.5 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-white text-xs font-semibold flex items-center gap-1.5 transition disabled:opacity-50 cursor-pointer"
+                className="px-3 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-white text-xs font-semibold flex items-center gap-1.5 transition disabled:opacity-50 cursor-pointer"
               >
                 <Play className={`w-3.5 h-3.5 text-emerald-400 ${testingWrite ? 'animate-spin' : ''}`} />
-                <span>{testingWrite ? 'Testando gravação...' : 'Testar Gravação no Supabase'}</span>
+                <span>{testingWrite ? 'Testando...' : 'Testar Gravação'}</span>
+              </button>
+              <button
+                onClick={handlePullAllData}
+                disabled={pullingAll}
+                className="px-3 py-2 rounded-xl bg-cyan-600/20 hover:bg-cyan-600/30 text-cyan-300 border border-cyan-500/30 text-xs font-semibold flex items-center gap-1.5 transition disabled:opacity-50 cursor-pointer"
+              >
+                <DownloadCloud className={`w-3.5 h-3.5 ${pullingAll ? 'animate-bounce' : ''}`} />
+                <span>{pullingAll ? 'Baixando...' : 'Baixar Dados do Supabase'}</span>
               </button>
               <button
                 onClick={handlePushAllData}
@@ -501,10 +539,24 @@ export const DatabaseHealthChecker: React.FC = () => {
                 className="px-3.5 py-2 rounded-xl bg-orange-500 hover:bg-orange-600 text-slate-950 text-xs font-bold flex items-center gap-1.5 transition disabled:opacity-50 cursor-pointer shadow-md shadow-orange-500/20"
               >
                 <UploadCloud className={`w-4 h-4 ${syncingAll ? 'animate-bounce' : ''}`} />
-                <span>{syncingAll ? 'Sincronizando tudo...' : 'Sincronizar Todos os Dados para o Supabase'}</span>
+                <span>{syncingAll ? 'Enviando tudo...' : 'Enviar Dados para o Supabase'}</span>
               </button>
             </div>
           </div>
+
+          {/* Pull Result Feedback */}
+          {pullResultMsg && (
+            <div className={`p-3 rounded-xl text-xs flex items-center gap-2.5 ${
+              pullResultMsg.success 
+                ? 'bg-cyan-500/10 border border-cyan-500/30 text-cyan-300' 
+                : 'bg-rose-500/10 border border-rose-500/30 text-rose-300'
+            }`}>
+              {pullResultMsg.success ? <CheckCircle className="w-4 h-4 text-cyan-400 shrink-0" /> : <AlertTriangle className="w-4 h-4 text-rose-400 shrink-0" />}
+              <div>
+                <strong>{pullResultMsg.success ? 'Dados Baixados:' : 'Aviso:'}</strong> {pullResultMsg.text}
+              </div>
+            </div>
+          )}
 
           {/* Test Write Feedback */}
           {testWriteResult && (
@@ -764,6 +816,58 @@ export const DatabaseHealthChecker: React.FC = () => {
                 <li>Clique no botão <strong>+ New query</strong>.</li>
                 <li>Cole o código SQL (clicando no botão laranja <strong>Copiar SQL Completo</strong> acima) e clique em <strong>Run</strong> (<kbd className="px-1.5 py-0.5 bg-slate-800 rounded font-mono text-[10px]">Ctrl + Enter</kbd>).</li>
               </ol>
+            </div>
+          )}
+        </div>
+
+        {/* Vercel Deployment & Connection Guide */}
+        <div className="border border-slate-800 rounded-2xl overflow-hidden bg-slate-950">
+          <button
+            onClick={() => setShowVercelGuide(!showVercelGuide)}
+            className="w-full px-5 py-3.5 text-left flex items-center justify-between text-xs font-bold text-slate-300 hover:text-white hover:bg-slate-900/50 transition cursor-pointer"
+          >
+            <span className="flex items-center gap-2 text-cyan-400">
+              <Globe className="w-4 h-4" />
+              Como Conectar via Vercel (Variáveis de Ambiente & Deploy)
+            </span>
+            {showVercelGuide ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+          </button>
+
+          {showVercelGuide && (
+            <div className="p-5 pt-2 border-t border-slate-800/80 space-y-4 text-xs text-slate-300">
+              <p className="text-slate-400">
+                Para que sua aplicação hospedada na Vercel conecte automaticamente ao Supabase sem depender do LocalStorage do navegador, adicione as variáveis de ambiente no painel da Vercel:
+              </p>
+              <div className="space-y-3">
+                <div className="bg-slate-900 p-3.5 rounded-xl border border-slate-800 space-y-1.5">
+                  <span className="font-bold text-white text-[11px] block">1. Abra seu Projeto na Vercel:</span>
+                  <p className="text-slate-400 text-[11px]">
+                    Acesse <a href="https://vercel.com/dashboard" target="_blank" rel="noreferrer" className="text-cyan-400 hover:underline inline-flex items-center gap-1">vercel.com/dashboard <ExternalLink className="w-3 h-3" /></a> e selecione o projeto do Quem Resolve.
+                  </p>
+                </div>
+                <div className="bg-slate-900 p-3.5 rounded-xl border border-slate-800 space-y-2">
+                  <span className="font-bold text-white text-[11px] block">2. Vá em Settings &gt; Environment Variables e adicione:</span>
+                  <div className="space-y-1.5 font-mono text-[11px]">
+                    <div className="p-2 rounded bg-slate-950 border border-slate-800 flex justify-between items-center">
+                      <span><strong className="text-orange-400">Key:</strong> VITE_SUPABASE_URL</span>
+                      <span className="text-slate-400 text-[10px]">(Ex: https://xyzcompany.supabase.co)</span>
+                    </div>
+                    <div className="p-2 rounded bg-slate-950 border border-slate-800 flex justify-between items-center">
+                      <span><strong className="text-orange-400">Key:</strong> VITE_SUPABASE_ANON_KEY</span>
+                      <span className="text-slate-400 text-[10px]">(Sua anon / public key do Supabase)</span>
+                    </div>
+                  </div>
+                </div>
+                <div className="bg-slate-900 p-3.5 rounded-xl border border-slate-800 space-y-1.5">
+                  <span className="font-bold text-white text-[11px] block">3. Faça o Redeploy na Vercel:</span>
+                  <p className="text-slate-400 text-[11px]">
+                    Vá na aba <strong>Deployments</strong>, clique nos três pontinhos (<kbd className="px-1 bg-slate-800 rounded">···</kbd>) do último deploy e selecione <strong>Redeploy</strong>.
+                  </p>
+                  <p className="text-emerald-400 text-[11px] font-semibold">
+                    ✓ O Vite compilará as variáveis e sua aplicação na Vercel estará 100% conectada ao Supabase!
+                  </p>
+                </div>
+              </div>
             </div>
           )}
         </div>

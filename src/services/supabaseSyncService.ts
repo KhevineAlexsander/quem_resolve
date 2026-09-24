@@ -219,6 +219,21 @@ export const supabaseSyncService = {
     }
   },
 
+  // --- 6.1. Deleção de Categoria (categories) ---
+  async deleteCategory(categoryId: string): Promise<{ success: boolean; error?: string }> {
+    const client = getSupabase();
+    if (!isSupabaseConfigured() || !client) {
+      return { success: false, error: 'Supabase não configurado' };
+    }
+    try {
+      const { error } = await client.from('categories').delete().eq('id', categoryId);
+      if (error) return { success: false, error: error.message };
+      return { success: true };
+    } catch (e: any) {
+      return { success: false, error: e?.message };
+    }
+  },
+
   // --- 7. Sincronização de Profissionais (professionals) ---
   async syncProfessional(pro: Professional): Promise<{ success: boolean; error?: string }> {
     const client = getSupabase();
@@ -504,5 +519,266 @@ export const supabaseSyncService = {
         durationMs: Math.round(performance.now() - start),
       };
     }
+  },
+
+  // --- 10. Carregar Todos os Dados do Supabase para o App (Pull / Sincronização de Entrada) ---
+  async pullAllFromSupabase(): Promise<{ success: boolean; loadedCounts?: Record<string, number>; error?: string }> {
+    const client = getSupabase();
+    if (!isSupabaseConfigured() || !client) {
+      return { success: false, error: 'Supabase não configurado' };
+    }
+
+    try {
+      const counts: Record<string, number> = {};
+
+      // A. Categorias
+      const { data: categories } = await client.from('categories').select('*');
+      if (categories && categories.length > 0) {
+        appStore.mergeCategoriesFromSupabase(categories.map(c => ({
+          id: c.id,
+          name: c.name,
+          slug: c.slug,
+          description: c.description || '',
+          icon: c.icon || 'grid',
+          image_url: c.image_url || undefined,
+          is_active: c.is_active ?? true,
+        })));
+        counts.categories = categories.length;
+      }
+
+      // B. Solicitações de Serviço
+      const { data: requests } = await client.from('service_requests').select('*');
+      if (requests && requests.length > 0) {
+        appStore.mergeRequestsFromSupabase(requests.map(r => ({
+          id: r.id,
+          client_id: r.client_id,
+          category_id: r.category_id,
+          title: r.title,
+          description: r.description,
+          status: r.status,
+          scheduled_date: r.scheduled_date || undefined,
+          scheduled_start: r.scheduled_start || undefined,
+          address: r.address || '',
+          street: r.street || undefined,
+          number: r.number || undefined,
+          neighborhood: r.neighborhood || undefined,
+          city: r.city || 'Imperatriz',
+          state: r.state || 'MA',
+          cep: r.zip_code || undefined,
+          complement: r.complement || undefined,
+          latitude: r.latitude || -5.5266,
+          longitude: r.longitude || -47.4797,
+          urgency: r.urgency || 'normal',
+          created_at: r.created_at,
+          updated_at: r.updated_at,
+        })));
+        counts.requests = requests.length;
+      }
+
+      // C. Orçamentos
+      const { data: quotes } = await client.from('quotes').select('*');
+      if (quotes && quotes.length > 0) {
+        appStore.mergeQuotesFromSupabase(quotes.map(q => ({
+          id: q.id,
+          service_request_id: q.service_request_id,
+          professional_id: q.professional_id,
+          amount: Number(q.amount) || 0,
+          description: q.description || '',
+          estimated_duration: q.estimated_duration || '',
+          available_date: q.available_date || undefined,
+          available_time: q.available_time || undefined,
+          status: q.status,
+          created_at: q.created_at,
+        })));
+        counts.quotes = quotes.length;
+      }
+
+      // D. Mensagens
+      const { data: messages } = await client.from('messages').select('*');
+      if (messages && messages.length > 0) {
+        appStore.mergeMessagesFromSupabase(messages.map(m => ({
+          id: m.id,
+          conversation_id: m.conversation_id,
+          sender_id: m.sender_id,
+          message: m.message,
+          message_type: m.message_type || 'text',
+          read_at: m.read_at || undefined,
+          created_at: m.created_at,
+        })));
+        counts.messages = messages.length;
+      }
+
+      // E. Avaliações
+      const { data: reviews } = await client.from('reviews').select('*');
+      if (reviews && reviews.length > 0) {
+        appStore.mergeReviewsFromSupabase(reviews.map(rev => ({
+          id: rev.id,
+          service_request_id: rev.service_request_id,
+          client_id: rev.client_id,
+          professional_id: rev.professional_id,
+          rating: Number(rev.rating) || 5,
+          comment: rev.comment || '',
+          created_at: rev.created_at,
+        })));
+        counts.reviews = reviews.length;
+      }
+
+      // F. Histórico de Status
+      const { data: histories } = await client.from('service_status_history').select('*');
+      if (histories && histories.length > 0) {
+        appStore.mergeStatusHistoryFromSupabase(histories.map(h => ({
+          id: h.id,
+          service_request_id: h.service_request_id,
+          status: h.status,
+          title: h.changed_by_name || 'Atualização de status',
+          description: h.notes || undefined,
+          created_at: h.created_at,
+        })));
+        counts.histories = histories.length;
+      }
+
+      return { success: true, loadedCounts: counts };
+    } catch (e: any) {
+      console.warn('Erro ao carregar dados do Supabase:', e);
+      return { success: false, error: e?.message };
+    }
+  },
+
+  // --- 11. Escuta em Tempo Real (Supabase Realtime Channel) ---
+  setupRealtime(onSync?: () => void): () => void {
+    const client = getSupabase();
+    if (!isSupabaseConfigured() || !client) {
+      return () => {};
+    }
+
+    try {
+      const channel = client.channel('public:realtime_sync')
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'service_requests' }, (payload) => {
+          if (payload.new && (payload.eventType === 'INSERT' || payload.eventType === 'UPDATE')) {
+            const r = payload.new as any;
+            appStore.mergeRequestsFromSupabase([{
+              id: r.id,
+              client_id: r.client_id,
+              category_id: r.category_id,
+              title: r.title,
+              description: r.description,
+              status: r.status,
+              scheduled_date: r.scheduled_date || undefined,
+              scheduled_start: r.scheduled_start || undefined,
+              address: r.address || '',
+              street: r.street || undefined,
+              number: r.number || undefined,
+              neighborhood: r.neighborhood || undefined,
+              city: r.city || 'Imperatriz',
+              state: r.state || 'MA',
+              cep: r.zip_code || undefined,
+              complement: r.complement || undefined,
+              latitude: r.latitude || -5.5266,
+              longitude: r.longitude || -47.4797,
+              urgency: r.urgency || 'normal',
+              created_at: r.created_at,
+              updated_at: r.updated_at,
+            }]);
+            onSync?.();
+          }
+        })
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'quotes' }, (payload) => {
+          if (payload.new && (payload.eventType === 'INSERT' || payload.eventType === 'UPDATE')) {
+            const q = payload.new as any;
+            appStore.mergeQuotesFromSupabase([{
+              id: q.id,
+              service_request_id: q.service_request_id,
+              professional_id: q.professional_id,
+              amount: Number(q.amount) || 0,
+              description: q.description || '',
+              estimated_duration: q.estimated_duration || '',
+              available_date: q.available_date || undefined,
+              available_time: q.available_time || undefined,
+              status: q.status,
+              created_at: q.created_at,
+            }]);
+            onSync?.();
+          }
+        })
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'messages' }, (payload) => {
+          if (payload.new && (payload.eventType === 'INSERT' || payload.eventType === 'UPDATE')) {
+            const m = payload.new as any;
+            appStore.mergeMessagesFromSupabase([{
+              id: m.id,
+              conversation_id: m.conversation_id,
+              sender_id: m.sender_id,
+              message: m.message,
+              message_type: m.message_type || 'text',
+              read_at: m.read_at || undefined,
+              created_at: m.created_at,
+            }]);
+            onSync?.();
+          }
+        })
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'categories' }, (payload) => {
+          if (payload.new && (payload.eventType === 'INSERT' || payload.eventType === 'UPDATE')) {
+            const c = payload.new as any;
+            appStore.mergeCategoriesFromSupabase([{
+              id: c.id,
+              name: c.name,
+              slug: c.slug,
+              description: c.description || '',
+              icon: c.icon || 'grid',
+              image_url: c.image_url || undefined,
+              is_active: c.is_active ?? true,
+            }]);
+            onSync?.();
+          }
+        })
+        .subscribe();
+
+      return () => {
+        try {
+          client.removeChannel(channel);
+        } catch (e) {
+          // cleanup
+        }
+      };
+    } catch (e) {
+      console.warn('Erro ao configurar realtime Supabase:', e);
+      return () => {};
+    }
   }
 };
+
+// Conecta o listener global de mutações para garantir que TODAS as alterações no app sejam refletidas no Supabase
+appStore.onMutation((event, payload) => {
+  if (!isSupabaseConfigured()) return;
+  switch (event) {
+    case 'CREATE_REQUEST':
+    case 'UPDATE_REQUEST':
+      supabaseSyncService.syncServiceRequest(payload);
+      break;
+    case 'UPDATE_STATUS_HISTORY':
+      supabaseSyncService.syncStatusHistory(payload);
+      break;
+    case 'CREATE_QUOTE':
+    case 'UPDATE_QUOTE':
+      supabaseSyncService.syncQuote(payload);
+      break;
+    case 'SEND_MESSAGE':
+      supabaseSyncService.syncMessage(payload);
+      break;
+    case 'CREATE_REVIEW':
+      supabaseSyncService.syncReview(payload);
+      break;
+    case 'ADD_CATEGORY':
+    case 'UPDATE_CATEGORY':
+      supabaseSyncService.syncCategory(payload);
+      break;
+    case 'DELETE_CATEGORY':
+      if (payload?.id) {
+        supabaseSyncService.deleteCategory(payload.id);
+      }
+      break;
+    case 'UPDATE_PROFESSIONAL':
+      supabaseSyncService.syncProfessional(payload);
+      break;
+  }
+});
+

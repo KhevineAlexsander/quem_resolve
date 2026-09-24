@@ -5,20 +5,37 @@ const STORAGE_KEYS = {
   SUPABASE_KEY: 'quemresolve_supabase_anon_key',
 };
 
-// Obter URL e Key tanto das variáveis de ambiente (.env) quanto do LocalStorage configurado no painel
+// Obter URL e Key tanto das variáveis de ambiente (.env / Vercel) quanto do LocalStorage configurado no painel
 export const getSupabaseCredentials = (): { url: string; key: string; source: 'env' | 'custom' | 'none' } => {
-  const customUrl = typeof window !== 'undefined' ? localStorage.getItem(STORAGE_KEYS.SUPABASE_URL) : null;
-  const customKey = typeof window !== 'undefined' ? localStorage.getItem(STORAGE_KEYS.SUPABASE_KEY) : null;
+  const customUrl = typeof window !== 'undefined' 
+    ? localStorage.getItem(STORAGE_KEYS.SUPABASE_URL)?.replace(/^["']|["']$/g, '').trim() 
+    : null;
+  const customKey = typeof window !== 'undefined' 
+    ? localStorage.getItem(STORAGE_KEYS.SUPABASE_KEY)?.replace(/^["']|["']$/g, '').trim() 
+    : null;
 
   if (customUrl && customUrl.startsWith('http') && customKey && customKey.length > 20) {
-    return { url: customUrl.trim(), key: customKey.trim(), source: 'custom' };
+    return { url: customUrl, key: customKey, source: 'custom' };
   }
 
-  const envUrl = import.meta.env.VITE_SUPABASE_URL;
-  const envKey = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY;
+  // Suporte a múltiplas nomenclaturas comuns no Vercel e Supabase
+  const envUrl = (
+    import.meta.env.VITE_SUPABASE_URL ||
+    import.meta.env.VITE_SUPABASE_PROJECT_URL ||
+    (import.meta.env as any).SUPABASE_URL ||
+    ''
+  ).toString().replace(/^["']|["']$/g, '').trim();
+
+  const envKey = (
+    import.meta.env.VITE_SUPABASE_ANON_KEY ||
+    import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY ||
+    import.meta.env.VITE_SUPABASE_KEY ||
+    (import.meta.env as any).SUPABASE_ANON_KEY ||
+    ''
+  ).toString().replace(/^["']|["']$/g, '').trim();
 
   if (envUrl && envUrl.startsWith('http') && envKey && envKey.length > 20) {
-    return { url: envUrl.trim(), key: envKey.trim(), source: 'env' };
+    return { url: envUrl, key: envKey, source: 'env' };
   }
 
   return { 

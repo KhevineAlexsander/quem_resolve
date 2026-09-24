@@ -249,6 +249,115 @@ class AppStore {
     this.listeners.forEach((listener) => listener());
   }
 
+  private mutationListeners: Set<(event: string, payload: any) => void> = new Set();
+
+  public onMutation(listener: (event: string, payload: any) => void) {
+    this.mutationListeners.add(listener);
+    return () => {
+      this.mutationListeners.delete(listener);
+    };
+  }
+
+  public emitMutation(event: string, payload: any) {
+    this.mutationListeners.forEach((listener) => {
+      try {
+        listener(event, payload);
+      } catch (err) {
+        console.warn('[Store] Erro no listener de mutação:', err);
+      }
+    });
+  }
+
+  // --- Merge methods para sincronização bidirecional do Supabase ---
+  public mergeRequestsFromSupabase(supaRequests: ServiceRequest[]) {
+    if (!supaRequests || supaRequests.length === 0) return;
+    const current = this.getRequests();
+    const map = new Map<string, ServiceRequest>();
+    current.forEach(r => map.set(r.id, r));
+    supaRequests.forEach(r => {
+      const existing = map.get(r.id);
+      map.set(r.id, existing ? { ...existing, ...r } : r);
+    });
+    const merged = Array.from(map.values());
+    localStorage.setItem(STORAGE_KEYS.REQUESTS, JSON.stringify(merged));
+    this.notify();
+  }
+
+  public mergeQuotesFromSupabase(supaQuotes: Quote[]) {
+    if (!supaQuotes || supaQuotes.length === 0) return;
+    const current = this.getQuotes();
+    const map = new Map<string, Quote>();
+    current.forEach(q => map.set(q.id, q));
+    supaQuotes.forEach(q => {
+      const existing = map.get(q.id);
+      map.set(q.id, existing ? { ...existing, ...q } : q);
+    });
+    const merged = Array.from(map.values());
+    localStorage.setItem(STORAGE_KEYS.QUOTES, JSON.stringify(merged));
+    this.notify();
+  }
+
+  public mergeCategoriesFromSupabase(supaCats: Category[]) {
+    if (!supaCats || supaCats.length === 0) return;
+    const current = this.getCategories();
+    const map = new Map<string, Category>();
+    current.forEach(c => map.set(c.id, c));
+    supaCats.forEach(c => {
+      const existing = map.get(c.id);
+      map.set(c.id, existing ? { ...existing, ...c } : c);
+    });
+    const merged = Array.from(map.values());
+    localStorage.setItem(STORAGE_KEYS.CATEGORIES, JSON.stringify(merged));
+    this.notify();
+  }
+
+  public mergeMessagesFromSupabase(supaMsgs: Message[]) {
+    if (!supaMsgs || supaMsgs.length === 0) return;
+    const current = this.getMessages();
+    const map = new Map<string, Message>();
+    current.forEach(m => map.set(m.id, m));
+    supaMsgs.forEach(m => {
+      const existing = map.get(m.id);
+      map.set(m.id, existing ? { ...existing, ...m } : m);
+    });
+    const merged = Array.from(map.values());
+    localStorage.setItem(STORAGE_KEYS.MESSAGES, JSON.stringify(merged));
+    this.notify();
+  }
+
+  public mergeReviewsFromSupabase(supaRevs: Review[]) {
+    if (!supaRevs || supaRevs.length === 0) return;
+    const current = this.getReviews();
+    const map = new Map<string, Review>();
+    current.forEach(r => map.set(r.id, r));
+    supaRevs.forEach(r => {
+      const existing = map.get(r.id);
+      map.set(r.id, existing ? { ...existing, ...r } : r);
+    });
+    const merged = Array.from(map.values());
+    localStorage.setItem(STORAGE_KEYS.REVIEWS, JSON.stringify(merged));
+    this.notify();
+  }
+
+  public mergeStatusHistoryFromSupabase(histories: ServiceStatusHistory[]) {
+    if (!histories || histories.length === 0) return;
+    const raw = localStorage.getItem(STORAGE_KEYS.STATUS_HISTORY);
+    const historyMap: Record<string, ServiceStatusHistory[]> = raw ? JSON.parse(raw) : INITIAL_STATUS_HISTORY;
+    histories.forEach(h => {
+      if (!historyMap[h.service_request_id]) {
+        historyMap[h.service_request_id] = [];
+      }
+      const existingIndex = historyMap[h.service_request_id].findIndex(x => x.id === h.id);
+      if (existingIndex === -1) {
+        historyMap[h.service_request_id].push(h);
+      } else {
+        historyMap[h.service_request_id][existingIndex] = { ...historyMap[h.service_request_id][existingIndex], ...h };
+      }
+    });
+    localStorage.setItem(STORAGE_KEYS.STATUS_HISTORY, JSON.stringify(historyMap));
+    this.notify();
+  }
+
   // --- Current User / Profile ---
   public getCurrentUser(): Profile {
     const raw = localStorage.getItem(STORAGE_KEYS.CURRENT_USER);
@@ -309,6 +418,7 @@ class AppStore {
     list.push(newCat);
     localStorage.setItem(STORAGE_KEYS.CATEGORIES, JSON.stringify(list));
     this.notify();
+    this.emitMutation('ADD_CATEGORY', newCat);
     return newCat;
   }
 
@@ -316,6 +426,7 @@ class AppStore {
     const list = this.getCategories().filter(c => c.id !== id);
     localStorage.setItem(STORAGE_KEYS.CATEGORIES, JSON.stringify(list));
     this.notify();
+    this.emitMutation('DELETE_CATEGORY', { id });
   }
 
   public toggleCategoryActive(id: string) {
@@ -325,6 +436,7 @@ class AppStore {
       target.is_active = !target.is_active;
       localStorage.setItem(STORAGE_KEYS.CATEGORIES, JSON.stringify(list));
       this.notify();
+      this.emitMutation('UPDATE_CATEGORY', target);
     }
   }
 
@@ -349,6 +461,7 @@ class AppStore {
       pros[index].is_available = isAvailable;
       localStorage.setItem(STORAGE_KEYS.PROFESSIONALS, JSON.stringify(pros));
       this.notify();
+      this.emitMutation('UPDATE_PROFESSIONAL', pros[index]);
     }
   }
 
@@ -490,6 +603,7 @@ class AppStore {
     });
 
     this.notify();
+    this.emitMutation('CREATE_REQUEST', newReq);
     return newReq;
   }
 
@@ -568,6 +682,12 @@ class AppStore {
     });
 
     this.notify();
+    this.emitMutation('UPDATE_REQUEST', req);
+    const historyList = this.getStatusHistory(id);
+    const latestHistory = historyList[historyList.length - 1];
+    if (latestHistory) {
+      this.emitMutation('UPDATE_STATUS_HISTORY', latestHistory);
+    }
     return { success: true };
   }
 
@@ -609,6 +729,7 @@ class AppStore {
     }
 
     this.notify();
+    this.emitMutation('CREATE_QUOTE', newQuote);
     return newQuote;
   }
 
@@ -663,6 +784,14 @@ class AppStore {
     });
 
     this.notify();
+    const chosenQuote = this.getQuotes().find(q => q.id === quoteId);
+    if (chosenQuote) {
+      this.emitMutation('UPDATE_QUOTE', chosenQuote);
+    }
+    const updatedReq = this.getRequestById(requestId);
+    if (updatedReq) {
+      this.emitMutation('UPDATE_REQUEST', updatedReq);
+    }
   }
 
   // --- Messages / Chat ---
@@ -692,6 +821,7 @@ class AppStore {
     messages.push(newMsg);
     localStorage.setItem(STORAGE_KEYS.MESSAGES, JSON.stringify(messages));
     this.notify();
+    this.emitMutation('SEND_MESSAGE', newMsg);
     return newMsg;
   }
 
@@ -832,6 +962,7 @@ class AppStore {
     reviews.unshift(newRev);
     localStorage.setItem(STORAGE_KEYS.REVIEWS, JSON.stringify(reviews));
     this.notify();
+    this.emitMutation('CREATE_REVIEW', newRev);
     return newRev;
   }
 }

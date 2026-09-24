@@ -176,3 +176,21 @@ console.log('Created public/apple-touch-icon.png (' + appleTouchIcon.length + ' 
 const favicon = createPng(64, 64, renderBrandIcon);
 fs.writeFileSync(path.join(publicDir, 'favicon.png'), favicon);
 console.log('Created public/favicon.png (' + favicon.length + ' bytes)');
+
+// Generate favicon.ico wrapping the PNG
+const icoHeader = Buffer.alloc(22);
+icoHeader.writeUInt16LE(0, 0); // reserved
+icoHeader.writeUInt16LE(1, 2); // icon type (ICO)
+icoHeader.writeUInt16LE(1, 4); // 1 image
+icoHeader.writeUInt8(64, 6);   // width
+icoHeader.writeUInt8(64, 7);   // height
+icoHeader.writeUInt8(0, 8);    // color count
+icoHeader.writeUInt8(0, 9);    // reserved
+icoHeader.writeUInt16LE(1, 10); // color planes
+icoHeader.writeUInt16LE(32, 12); // bits per pixel
+icoHeader.writeUInt32LE(favicon.length, 14); // data size
+icoHeader.writeUInt32LE(22, 18); // offset to image data
+
+const faviconIco = Buffer.concat([icoHeader, favicon]);
+fs.writeFileSync(path.join(publicDir, 'favicon.ico'), faviconIco);
+console.log('Created public/favicon.ico (' + faviconIco.length + ' bytes)');

@@ -1,5 +1,6 @@
 import { appStore } from '../lib/store';
 import { ServiceTracking, ServiceTrackingStatus } from '../types';
+import { serviceRequestService } from './serviceRequestService';
 
 export const trackingService = {
   getTracking(requestId: string): ServiceTracking | undefined {
@@ -19,7 +20,7 @@ export const trackingService = {
   },
 
   updateStatus(requestId: string, status: ServiceTrackingStatus) {
-    return appStore.updateRequestStatus(requestId, status);
+    return serviceRequestService.updateStatus(requestId, status);
   }
 };
 
