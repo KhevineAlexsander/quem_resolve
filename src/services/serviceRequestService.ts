@@ -1,6 +1,6 @@
 import { appStore } from '../lib/store';
-import { supabase, isSupabaseConfigured } from '../lib/supabase';
-import { ServiceRequest, ServiceRequestStatus, ServiceTrackingStatus, ServiceStatusHistory } from '../types';
+import { supabaseSyncService } from './supabaseSyncService';
+import { ServiceRequest, ServiceTrackingStatus, ServiceStatusHistory } from '../types';
 
 export const serviceRequestService = {
   getAll(): ServiceRequest[] {
@@ -73,24 +73,10 @@ export const serviceRequestService = {
       images,
     });
 
-    if (isSupabaseConfigured() && supabase) {
-      try {
-        await supabase.from('service_requests').insert([
-          {
-            id: newReq.id,
-            client_id: newReq.client_id,
-            category_id: newReq.category_id,
-            title: newReq.title,
-            description: newReq.description,
-            status: newReq.status,
-            address: newReq.address,
-            urgency: newReq.urgency,
-          },
-        ]);
-      } catch (e) {
-        console.warn('Supabase sync warning:', e);
-      }
-    }
+    // Sincroniza em tempo real com o Supabase
+    supabaseSyncService.syncServiceRequest(newReq).catch(err => {
+      console.warn('Falha na sincronização assíncrona do pedido com Supabase:', err);
+    });
 
     return newReq;
   },
@@ -103,18 +89,16 @@ export const serviceRequestService = {
   ): { success: boolean; error?: string } {
     const result = appStore.updateRequestStatus(id, status, proName, customDescription);
     
-    if (isSupabaseConfigured() && supabase && result.success) {
-      try {
-        supabase.from('service_requests').update({ status, updated_at: new Date().toISOString() }).eq('id', id);
-        supabase.from('service_status_history').insert([
-          {
-            service_request_id: id,
-            status,
-            created_at: new Date().toISOString(),
-          }
-        ]);
-      } catch (e) {
-        console.warn('Supabase status update error:', e);
+    if (result.success) {
+      const updatedReq = appStore.getRequestById(id);
+      if (updatedReq) {
+        supabaseSyncService.syncServiceRequest(updatedReq);
+      }
+      
+      const historyList = appStore.getStatusHistory(id);
+      const latestHistory = historyList[historyList.length - 1];
+      if (latestHistory) {
+        supabaseSyncService.syncStatusHistory(latestHistory);
       }
     }
 

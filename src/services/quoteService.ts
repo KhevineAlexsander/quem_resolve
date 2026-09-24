@@ -1,4 +1,5 @@
 import { appStore } from '../lib/store';
+import { supabaseSyncService } from './supabaseSyncService';
 import { Quote } from '../types';
 
 export const quoteService = {
@@ -15,7 +16,7 @@ export const quoteService = {
     available_date?: string;
     available_time?: string;
   }): Quote {
-    return appStore.createQuote({
+    const newQuote = appStore.createQuote({
       service_request_id: data.service_request_id,
       professional_id: data.professional_id,
       amount: data.amount,
@@ -25,9 +26,24 @@ export const quoteService = {
       available_time: data.available_time || '10:00',
       status: 'pending',
     });
+
+    supabaseSyncService.syncQuote(newQuote).catch(err => {
+      console.warn('Falha na sincronização do orçamento com Supabase:', err);
+    });
+
+    return newQuote;
   },
 
   accept(quoteId: string, requestId: string) {
     appStore.acceptQuote(quoteId, requestId);
+
+    const quote = appStore.getQuotes().find(q => q.id === quoteId);
+    if (quote) {
+      supabaseSyncService.syncQuote(quote);
+    }
+    const req = appStore.getRequestById(requestId);
+    if (req) {
+      supabaseSyncService.syncServiceRequest(req);
+    }
   },
 };

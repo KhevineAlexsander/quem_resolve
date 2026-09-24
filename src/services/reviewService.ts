@@ -1,4 +1,5 @@
 import { appStore } from '../lib/store';
+import { supabaseSyncService } from './supabaseSyncService';
 import { Review } from '../types';
 
 export const reviewService = {
@@ -13,6 +14,12 @@ export const reviewService = {
     rating: number;
     comment: string;
   }): Review {
-    return appStore.createReview(data);
+    const newRev = appStore.createReview(data);
+
+    supabaseSyncService.syncReview(newRev).catch(err => {
+      console.warn('Falha na sincronização da avaliação com Supabase:', err);
+    });
+
+    return newRev;
   },
 };

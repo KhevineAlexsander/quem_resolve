@@ -1,5 +1,6 @@
 import { appStore } from '../lib/store';
 import { calculateDistanceKm } from '../lib/geoUtils';
+import { supabaseSyncService } from './supabaseSyncService';
 import { Professional } from '../types';
 
 export const professionalService = {
@@ -28,7 +29,6 @@ export const professionalService = {
       .filter(pro => {
         if (params.onlyAvailable && !pro.is_available) return false;
         if (targetCategory) {
-          // If category filter requested, check specialties or category
           const matches = pro.specialties?.some(s => 
             s.toLowerCase().includes(targetCategory.name.toLowerCase()) ||
             targetCategory.name.toLowerCase().includes(s.toLowerCase())
@@ -57,5 +57,9 @@ export const professionalService = {
 
   toggleAvailability(proId: string, isAvailable: boolean) {
     appStore.updateProfessionalAvailability(proId, isAvailable);
+    const pro = appStore.getProfessionalById(proId);
+    if (pro) {
+      supabaseSyncService.syncProfessional(pro);
+    }
   },
 };

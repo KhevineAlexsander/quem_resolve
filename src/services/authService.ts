@@ -1,5 +1,5 @@
 import { appStore } from '../lib/store';
-import { supabase, isSupabaseConfigured } from '../lib/supabase';
+import { getSupabase, isSupabaseConfigured } from '../lib/supabase';
 import { Profile, UserRole } from '../types';
 
 export const authService = {
@@ -8,18 +8,18 @@ export const authService = {
   },
 
   async login(email: string, _password: string): Promise<Profile> {
-    if (isSupabaseConfigured() && supabase) {
+    const client = getSupabase();
+    if (isSupabaseConfigured() && client) {
       try {
-        const { data, error } = await supabase.auth.signInWithPassword({
+        const { data, error } = await client.auth.signInWithPassword({
           email,
           password: _password,
         });
-        if (error) throw error;
-        if (data.user) {
-          const { data: profile } = await supabase
+        if (!error && data.user) {
+          const { data: profile } = await client
             .from('profiles')
             .select('*')
-            .eq('user_id', data.user.id)
+            .eq('email', email)
             .single();
           if (profile) {
             appStore.setCurrentUser(profile);
@@ -27,7 +27,7 @@ export const authService = {
           }
         }
       } catch (err) {
-        console.warn('Supabase login failed, using local profile:', err);
+        console.warn('Supabase login tentado, usando perfil:', err);
       }
     }
 
@@ -52,6 +52,17 @@ export const authService = {
       created_at: new Date().toISOString(),
     };
     appStore.setCurrentUser(profile);
+
+    if (isSupabaseConfigured() && client) {
+      client.from('profiles').upsert({
+        id: profile.id,
+        user_id: profile.user_id,
+        full_name: profile.full_name,
+        email: profile.email,
+        role: profile.role,
+      }, { onConflict: 'id' }).then(() => {}, () => {});
+    }
+
     return profile;
   },
 
@@ -62,33 +73,29 @@ export const authService = {
     phone?: string;
     role: UserRole;
   }): Promise<Profile> {
-    if (isSupabaseConfigured() && supabase) {
+    const client = getSupabase();
+    if (isSupabaseConfigured() && client) {
       try {
-        const { data, error } = await supabase.auth.signUp({
+        const { data, error } = await client.auth.signUp({
           email: params.email,
           password: params.password || 'senha123456',
         });
-        if (error) throw error;
 
-        if (data.user) {
-          const newProfile: Omit<Profile, 'id'> = {
+        if (!error && data.user) {
+          const newProfile: Profile = {
+            id: 'prof-' + Date.now(),
             user_id: data.user.id,
             full_name: params.fullName,
             email: params.email,
-            phone: params.phone,
+            phone: params.phone || '(99) 98000-0000',
+            avatar_url: `https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=150&auto=format&fit=crop&q=80`,
             role: params.role,
             created_at: new Date().toISOString(),
           };
-          const { data: created, error: pErr } = await supabase
-            .from('profiles')
-            .insert([newProfile])
-            .select()
-            .single();
-          if (pErr) throw pErr;
-          if (created) {
-            appStore.setCurrentUser(created);
-            return created;
-          }
+          
+          await client.from('profiles').upsert(newProfile, { onConflict: 'id' });
+          appStore.setCurrentUser(newProfile);
+          return newProfile;
         }
       } catch (err) {
         console.warn('Supabase register error:', err);
@@ -106,12 +113,18 @@ export const authService = {
       created_at: new Date().toISOString(),
     };
     appStore.setCurrentUser(newProfile);
+
+    if (isSupabaseConfigured() && client) {
+      client.from('profiles').upsert(newProfile, { onConflict: 'id' }).then(() => {}, () => {});
+    }
+
     return newProfile;
   },
 
   async logout(): Promise<void> {
-    if (isSupabaseConfigured() && supabase) {
-      await supabase.auth.signOut();
+    const client = getSupabase();
+    if (isSupabaseConfigured() && client) {
+      await client.auth.signOut().then(() => {}, () => {});
     }
   },
 
@@ -121,5 +134,9 @@ export const authService = {
 
   setUser(profile: Profile) {
     appStore.setCurrentUser(profile);
+    const client = getSupabase();
+    if (isSupabaseConfigured() && client) {
+      client.from('profiles').upsert(profile, { onConflict: 'id' }).then(() => {}, () => {});
+    }
   },
 };

@@ -1,4 +1,4 @@
-import { supabase, isSupabaseConfigured } from '../lib/supabase';
+import { getSupabase, isSupabaseConfigured, getSupabaseCredentials } from '../lib/supabase';
 
 export interface TableHealth {
   name: string;
@@ -13,6 +13,7 @@ export interface DbDiagnosticResult {
   connected: boolean;
   latencyMs: number | null;
   supabaseUrl: string | null;
+  credentialSource: 'env' | 'custom' | 'none';
   hasAnonKey: boolean;
   checkedAt: string;
   tables: TableHealth[];
@@ -21,7 +22,7 @@ export interface DbDiagnosticResult {
 
 export const dbHealthService = {
   getMaskedUrl(): string | null {
-    const url = import.meta.env.VITE_SUPABASE_URL;
+    const { url } = getSupabaseCredentials();
     if (!url) return null;
     try {
       const parsed = new URL(url);
@@ -33,27 +34,30 @@ export const dbHealthService = {
 
   async runDiagnostic(): Promise<DbDiagnosticResult> {
     const startTime = performance.now();
-    const url = import.meta.env.VITE_SUPABASE_URL || null;
-    const key = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY || '';
+    const { url, key, source } = getSupabaseCredentials();
     const configured = isSupabaseConfigured();
+    const client = getSupabase();
 
     const initialTables: TableHealth[] = [
       { name: 'profiles', label: 'Perfis de Usuários (profiles)', status: 'not_tested' },
-      { name: 'service_requests', label: 'Solicitações (service_requests)', status: 'not_tested' },
+      { name: 'service_requests', label: 'Solicitações de Serviço (service_requests)', status: 'not_tested' },
       { name: 'service_status_history', label: 'Histórico de Linha do Tempo (service_status_history)', status: 'not_tested' },
       { name: 'quotes', label: 'Orçamentos (quotes)', status: 'not_tested' },
-      { name: 'notifications', label: 'Notificações (notifications)', status: 'not_tested' },
+      { name: 'professionals', label: 'Profissionais (professionals)', status: 'not_tested' },
       { name: 'categories', label: 'Categorias (categories)', status: 'not_tested' },
       { name: 'messages', label: 'Mensagens / Chat (messages)', status: 'not_tested' },
       { name: 'reviews', label: 'Avaliações (reviews)', status: 'not_tested' },
+      { name: 'notifications', label: 'Notificações (notifications)', status: 'not_tested' },
+      { name: 'platform_settings', label: 'Configurações (platform_settings)', status: 'not_tested' },
     ];
 
-    if (!configured || !supabase) {
+    if (!configured || !client) {
       return {
         isConfigured: false,
         connected: false,
         latencyMs: null,
         supabaseUrl: this.getMaskedUrl(),
+        credentialSource: source,
         hasAnonKey: key.length > 20,
         checkedAt: new Date().toLocaleTimeString('pt-BR'),
         tables: initialTables.map(t => ({
@@ -61,29 +65,32 @@ export const dbHealthService = {
           status: 'ok',
           message: 'Ativo em modo LocalStorage (Pronto para sincronizar)',
         })),
-        error: 'Chaves do Supabase (VITE_SUPABASE_URL e VITE_SUPABASE_PUBLISHABLE_KEY) não detectadas no ambiente. A aplicação está operando com persistência de alta performance em LocalStorage.',
+        error: 'Chaves do Supabase não configuradas no ambiente nem no painel. A aplicação está funcionando em modo local.',
       };
     }
 
     try {
-      // 1. Testa conectividade básica
-      const { data: pingData, error: pingError, count } = await supabase
-        .from('profiles')
-        .select('*', { count: 'exact', head: true });
+      // 1. Testa conectividade básica (ping leve)
+      const { data: pingData, error: pingError } = await client
+        .from('platform_settings')
+        .select('key', { count: 'exact', head: true });
 
       const latency = Math.round(performance.now() - startTime);
 
-      if (pingError && pingError.code !== 'PGRST116') {
-        // Erro de conexão ou permissão
+      // Se der erro 42P01 (relação não existe), o servidor respondeu, o que prova conexão com o Supabase!
+      const isConnectionOk = !pingError || pingError.code === '42P01' || pingError.code === 'PGRST116';
+
+      if (!isConnectionOk) {
         return {
           isConfigured: true,
           connected: false,
           latencyMs: latency,
           supabaseUrl: this.getMaskedUrl(),
+          credentialSource: source,
           hasAnonKey: key.length > 20,
           checkedAt: new Date().toLocaleTimeString('pt-BR'),
           tables: initialTables.map(t => ({ ...t, status: 'error', message: pingError.message })),
-          error: `Falha ao conectar no Supabase: ${pingError.message} (Código: ${pingError.code || 'Desconhecido'})`,
+          error: `Falha na autenticação ou rede do Supabase: ${pingError.message} (Código: ${pingError.code || 'Desconhecido'})`,
         };
       }
 
@@ -91,7 +98,7 @@ export const dbHealthService = {
       const tablesResults: TableHealth[] = await Promise.all(
         initialTables.map(async (table) => {
           try {
-            const { count: tCount, error: tError } = await supabase!
+            const { count: tCount, error: tError } = await client
               .from(table.name)
               .select('*', { count: 'exact', head: true });
 
@@ -100,7 +107,14 @@ export const dbHealthService = {
                 return {
                   ...table,
                   status: 'missing',
-                  message: 'Tabela não encontrada no schema público. Execute a migração SQL.',
+                  message: 'Tabela ausente no Supabase. Execute o script SQL no Supabase SQL Editor.',
+                };
+              }
+              if (tError.code === '42501') {
+                return {
+                  ...table,
+                  status: 'error',
+                  message: 'Acesso bloqueado por RLS. Execute o script SQL para liberar permissões da anon key.',
                 };
               }
               return {
@@ -114,7 +128,7 @@ export const dbHealthService = {
               ...table,
               status: 'ok',
               count: tCount ?? 0,
-              message: `Tabela ativa (${tCount ?? 0} registros)`,
+              message: `Tabela ativa e sincronizada (${tCount ?? 0} registros)`,
             };
           } catch (err: any) {
             return {
@@ -131,6 +145,7 @@ export const dbHealthService = {
         connected: true,
         latencyMs: latency,
         supabaseUrl: this.getMaskedUrl(),
+        credentialSource: source,
         hasAnonKey: true,
         checkedAt: new Date().toLocaleTimeString('pt-BR'),
         tables: tablesResults,
@@ -142,6 +157,7 @@ export const dbHealthService = {
         connected: false,
         latencyMs: latency,
         supabaseUrl: this.getMaskedUrl(),
+        credentialSource: source,
         hasAnonKey: key.length > 20,
         checkedAt: new Date().toLocaleTimeString('pt-BR'),
         tables: initialTables.map(t => ({ ...t, status: 'error' })),
